@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AeroJSON // Swagger-Like JSON Parser & API Simulator</title>
+  <!-- Google Fonts: Outfit (Brand, UI) & Fira Code (Mono for JSON/Code) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <div class="app-container">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="var(--accent-cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 17L12 22L22 17" stroke="var(--accent-purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 12L12 17L22 12" stroke="var(--accent-cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h1>AeroJSON <span class="badge">v1.0.0</span></h1>
+      </div>
+      
+      <div class="header-actions">
+        <!-- Quick Samples Dropdown -->
+        <div class="dropdown-wrapper">
+          <button id="samples-btn" class="btn btn-secondary">
+            <span>Load Sample JSON</span>
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div id="samples-dropdown" class="dropdown-content">
+            <button data-sample="users">User Profile Directory</button>
+            <button data-sample="products">eCommerce Catalog</button>
+            <button data-sample="weather">Weather Forecast API</button>
+            <button data-sample="openapi">Swagger OpenAPI Schema</button>
+            <button data-sample="heavy">Deeply Nested Heavy Dataset</button>
+          </div>
+        </div>
+
+        <!-- Parser Status Indicator -->
+        <div id="parser-status" class="status-badge status-empty">
+          <span class="status-dot"></span>
+          <span class="status-text">Empty Input</span>
+        </div>
+
+        <!-- Theme Toggle -->
+        <button id="theme-toggle" class="btn btn-icon" title="Toggle Theme">
+          <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Area -->
+    <main class="workspace">
+      <!-- Left Pane: Editor Panel -->
+      <section class="pane pane-editor">
+        <div class="pane-header">
+          <h2>JSON Input Editor</h2>
+          <div class="editor-actions">
+            <button id="btn-format" class="btn btn-sm btn-primary" title="Beautify JSON (Ctrl+Alt+F)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-2-2h-5l-4-4H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2z"></path></svg>
+              <span>Format</span>
+            </button>
+            <button id="btn-minify" class="btn btn-sm btn-secondary" title="Minify JSON">
+              <span>Minify</span>
+            </button>
+            <button id="btn-copy-input" class="btn btn-sm btn-secondary" title="Copy raw JSON">
+              <span>Copy</span>
+            </button>
+            <button id="btn-clear" class="btn btn-sm btn-danger" title="Clear Editor">
+              <span>Clear</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-wrapper">
+          <div class="line-numbers" id="line-numbers">
+            <span>1</span>
+          </div>
+          <textarea id="json-input" placeholder='Paste your JSON data here or load a sample from the header...' spellcheck="false" autocomplete="off"></textarea>
+        </div>
+
+        <!-- Validation Output Info Bar -->
+        <div class="editor-footer" id="error-console">
+          <div class="console-message text-muted">Ready to parse JSON data.</div>
+        </div>
+      </section>
+
+      <!-- Divider / Splitter -->
+      <div class="workspace-divider"></div>
+
+      <!-- Right Pane: Swagger-like interactive output -->
+      <section class="pane pane-viewer">
+        <!-- Visualizer Tabs Header -->
+        <div class="pane-header tabs-header">
+          <nav class="tabs-nav">
+            <button class="tab-btn active" data-tab="tab-swagger">
+              <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span>Swagger Spec Docs</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-tree">
+              <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+              <span>Interactive Tree</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-grid">
+              <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
+              <span>Data Grid</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-sandbox">
+              <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              <span>API Sandbox</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-code">
+              <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              <span>Code Snippets</span>
+            </button>
+          </nav>
+        </div>
+
+        <div class="tabs-content">
+          <!-- Tab 1: Swagger Spec Docs View -->
+          <div id="tab-swagger" class="tab-panel active">
+            <div class="swagger-layout">
+              <div class="swagger-meta-section card">
+                <div class="swagger-badge">OPENAPI 3.0.0</div>
+                <h2 id="swagger-doc-title">AeroJSON Mock Swagger Document</h2>
+                <p id="swagger-doc-desc">Autogenerated interactive API definition based on your JSON structure. Use this console to understand schemas, endpoints, and data types.</p>
+              </div>
+
+              <!-- Collapsible Endpoints (Swagger-like) -->
+              <div class="swagger-endpoints">
+                <!-- POST Example endpoint -->
+                <div class="endpoint-block endpoint-post collapsed">
+                  <div class="endpoint-summary" onclick="toggleEndpoint(this)">
+                    <span class="method-badge">POST</span>
+                    <span class="endpoint-path">/api/v1/resource</span>
+                    <span class="endpoint-description">Submit and validate data matching your JSON model</span>
+                    <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </div>
+                  <div class="endpoint-details">
+                    <div class="endpoint-section">
+                      <h3>Request Body</h3>
+                      <div class="schema-view">
+                        <div class="schema-header">
+                          <span>application/json</span>
+                        </div>
+                        <div class="schema-properties-table-wrapper">
+                          <table class="schema-properties-table">
+                            <thead>
+                              <tr>
+                                <th>Field Name</th>
+                                <th>Data Type</th>
+                                <th>Required</th>
+                                <th>Validation / Match</th>
+                              </tr>
+                            </thead>
+                            <tbody id="swagger-post-schema-body">
+                              <tr>
+                                <td colspan="4" class="text-muted text-center">Paste JSON into the editor to view schema definition</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="endpoint-section">
+                      <h3>Responses</h3>
+                      <table class="responses-table">
+                        <thead>
+                          <tr>
+                            <th>Code</th>
+                            <th>Description</th>
+                            <th>Schema Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr class="status-201-row">
+                            <td class="response-status"><span class="status-badge-201">201 Created</span></td>
+                            <td>Resource created successfully. Echoes parsed properties.</td>
+                            <td><code>Object</code></td>
+                          </tr>
+                          <tr class="status-400-row">
+                            <td class="response-status"><span class="status-badge-400">400 Bad Request</span></td>
+                            <td>Validation failed or body format is incorrect.</td>
+                            <td><code>ErrorResponse</code></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- GET Example endpoint -->
+                <div class="endpoint-block endpoint-get collapsed">
+                  <div class="endpoint-summary" onclick="toggleEndpoint(this)">
+                    <span class="method-badge">GET</span>
+                    <span class="endpoint-path">/api/v1/resource</span>
+                    <span class="endpoint-description">Retrieve simulated list matching the active structure</span>
+                    <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </div>
+                  <div class="endpoint-details">
+                    <div class="endpoint-section">
+                      <h3>Query Parameters</h3>
+                      <table class="parameters-table">
+                        <thead>
+                          <tr>
+                            <th>Parameter</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><code>limit</code></td>
+                            <td>integer</td>
+                            <td>No</td>
+                            <td>Number of records to return (Default: 10)</td>
+                          </tr>
+                          <tr>
+                            <td><code>offset</code></td>
+                            <td>integer</td>
+                            <td>No</td>
+                            <td>Offset index for pagination</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="endpoint-section">
+                      <h3>Responses</h3>
+                      <table class="responses-table">
+                        <thead>
+                          <tr>
+                            <th>Code</th>
+                            <th>Description</th>
+                            <th>Schema Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr class="status-200-row">
+                            <td class="response-status"><span class="status-badge-200">200 OK</span></td>
+                            <td>Returns list or array of structured items.</td>
+                            <td><code>Array&lt;Object&gt;</code></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Schema Models section (Swagger-like) -->
+              <div class="swagger-models-section card">
+                <h3>Schemas & Models</h3>
+                <div class="model-block">
+                  <div class="model-title" onclick="toggleModel(this)">
+                    <span class="model-name">JSONPayload</span>
+                    <span class="model-type">object</span>
+                    <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </div>
+                  <div class="model-properties" id="swagger-model-properties">
+                    <span class="text-muted">No model details found. Please input standard JSON.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 2: Interactive Collapsible Tree View -->
+          <div id="tab-tree" class="tab-panel">
+            <div class="tree-controls card">
+              <div class="search-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="tree-search" placeholder="Search JSON keys or values..." autocomplete="off">
+              </div>
+              <div class="tree-actions">
+                <button id="btn-tree-expand" class="btn btn-xs btn-secondary">Expand All</button>
+                <button id="btn-tree-collapse" class="btn btn-xs btn-secondary">Collapse All</button>
+              </div>
+            </div>
+            <div class="tree-viewport card">
+              <div id="tree-root" class="tree-node-list">
+                <span class="text-muted">Enter valid JSON in the editor to visualize as an interactive tree.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 3: Sandbox/Playground Panel (API Console) -->
+          <div id="tab-sandbox" class="tab-panel">
+            <div class="sandbox-container">
+              <div class="sandbox-request card">
+                <h3>API Mock Console</h3>
+                <p class="section-desc">Simulate live HTTP requests to endpoints mapping to your JSON structure.</p>
+                
+                <div class="request-bar">
+                  <select id="sandbox-method" class="form-select">
+                    <option value="POST">POST</option>
+                    <option value="GET">GET</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                  </select>
+                  <input type="text" id="sandbox-url" class="form-control" value="https://api.aerojson.dev/v1/mock/resource" readonly>
+                  <button id="btn-sandbox-send" class="btn btn-accent">Execute</button>
+                </div>
+
+                <div class="sandbox-settings mt-4">
+                  <div class="setting-row">
+                    <label for="sandbox-latency">Simulated Network Latency</label>
+                    <div class="slider-wrapper">
+                      <input type="range" id="sandbox-latency" min="50" max="3000" step="50" value="350">
+                      <span id="sandbox-latency-label">350 ms</span>
+                    </div>
+                  </div>
+                  
+                  <div class="setting-row">
+                    <label for="sandbox-response-status">Force HTTP Response Status</label>
+                    <select id="sandbox-response-status" class="form-select select-sm">
+                      <option value="200">200 OK (Success)</option>
+                      <option value="201">201 Created (Creation)</option>
+                      <option value="400">400 Bad Request (Validation Error)</option>
+                      <option value="401">401 Unauthorized (Auth Issue)</option>
+                      <option value="403">403 Forbidden</option>
+                      <option value="404">404 Not Found</option>
+                      <option value="500">500 Internal Server Error</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sandbox-response card">
+                <div class="sandbox-response-header">
+                  <h3>Response Dashboard</h3>
+                  <div class="response-meta" id="sandbox-response-meta" style="display: none;">
+                    <span class="resp-badge status-code" id="resp-status">200 OK</span>
+                    <span class="resp-badge duration" id="resp-duration">120ms</span>
+                    <span class="resp-badge size" id="resp-size">1.2 KB</span>
+                  </div>
+                </div>
+
+                <div class="sandbox-response-body">
+                  <div class="tab-subnav">
+                    <button class="subtab-btn active" data-subtab="subtab-body">Response Body</button>
+                    <button class="subtab-btn" data-subtab="subtab-headers">Headers</button>
+                  </div>
+                  
+                  <div class="subtab-content">
+                    <div id="subtab-body" class="subtab-panel active">
+                      <pre><code id="sandbox-response-pre" class="code-block json-syntax-highlight"><span class="text-muted">Click "Execute" above to trigger simulated mock API call.</span></code></pre>
+                    </div>
+                    <div id="subtab-headers" class="subtab-panel">
+                      <pre><code id="sandbox-headers-pre" class="code-block font-mono">Click "Execute" above to view returned response headers.</code></pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Tab 5: Data Grid -->
+          <div id="tab-grid" class="tab-panel">
+            <div class="grid-controls card">
+              <div class="grid-selector-wrapper">
+                <label for="grid-array-select" style="font-size: 13px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">Select Array Node:</label>
+                <select id="grid-array-select" class="form-select select-sm" style="max-width: 320px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--radius-sm);">
+                  <option value="">-- No Array Selected --</option>
+                </select>
+              </div>
+              <div class="grid-actions" style="margin-left: auto;">
+                <button id="btn-grid-export" class="btn btn-xs btn-secondary">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  <span>Export CSV</span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="grid-viewport card" style="overflow: auto;">
+              <div class="grid-table-container" id="grid-table-container">
+                <span class="text-muted">Load valid JSON and select an array node to display as a grid.</span>
+              </div>
+              
+              <!-- Grid Pagination -->
+              <div class="grid-pagination" id="grid-pagination" style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                <button id="btn-grid-prev" class="btn btn-xs btn-secondary">Previous</button>
+                <span id="grid-page-info" class="font-mono" style="font-size: 12px; color: var(--text-muted);">Page 1 of 1</span>
+                <button id="btn-grid-next" class="btn btn-xs btn-secondary">Next</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 4: Code Snippets Generator -->
+          <div id="tab-code" class="tab-panel">
+            <div class="code-generator-layout">
+              <div class="languages-selector card">
+                <h3>Select Language</h3>
+                <nav class="lang-nav">
+                  <button class="lang-btn active" data-lang="curl">
+                    <span>cURL Request</span>
+                  </button>
+                  <button class="lang-btn" data-lang="javascript">
+                    <span>JS Fetch API</span>
+                  </button>
+                  <button class="lang-btn" data-lang="python">
+                    <span>Python (Requests)</span>
+                  </button>
+                  <button class="lang-btn" data-lang="typescript">
+                    <span>TypeScript Types</span>
+                  </button>
+                </nav>
+              </div>
+
+              <div class="code-viewport card">
+                <div class="code-viewport-header">
+                  <span id="active-lang-title">cURL CLI Snippet</span>
+                  <button id="btn-copy-code" class="btn btn-xs btn-secondary">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <span>Copy Code</span>
+                  </button>
+                </div>
+                <div class="code-content-wrapper">
+                  <pre><code id="snippet-code-block" class="code-block font-mono">Code snippet generates automatically when valid JSON is present.</code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
