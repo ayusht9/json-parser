@@ -1,0 +1,30 @@
+# Dependencies (reinstalled in container)
+node_modules
+
+# Local build output (rebuilt inside Docker)
+dist
+dist-ssr
+
+# Version control
+.git
+.gitignore
+
+# Dev tooling & IDE
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Legacy / unused stylesheets
+styles.css
