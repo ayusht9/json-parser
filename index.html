@@ -114,6 +114,10 @@
               <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
               <span>Data Grid</span>
             </button>
+            <button class="tab-btn" data-tab="tab-tools">
+              <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+              <span>JSON Tools</span>
+            </button>
             <button class="tab-btn" data-tab="tab-sandbox">
               <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
               <span>API Sandbox</span>
@@ -392,6 +396,95 @@
                 <button id="btn-grid-prev" class="btn btn-xs btn-secondary">Previous</button>
                 <span id="grid-page-info" class="font-mono" style="font-size: 12px; color: var(--text-muted);">Page 1 of 1</span>
                 <button id="btn-grid-next" class="btn btn-xs btn-secondary">Next</button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Tab 6: JSON Tools Suite -->
+          <div id="tab-tools" class="tab-panel">
+            <div class="tools-layout">
+              <!-- Left Tool Menu -->
+              <div class="tools-sidebar card">
+                <h3>JSON Utility Tools</h3>
+                <nav class="tools-nav">
+                  <button class="tool-menu-btn active" data-tool="query">
+                    <span>JSONPath Query Filter</span>
+                  </button>
+                  <button class="tool-menu-btn" data-tool="convert">
+                    <span>YAML & XML Converter</span>
+                  </button>
+                  <button class="tool-menu-btn" data-tool="flatten">
+                    <span>Flatten & Expand JSON</span>
+                  </button>
+                </nav>
+              </div>
+
+              <!-- Right Tool Content -->
+              <div class="tool-viewport card">
+                <!-- Subpanel: Query Filter -->
+                <div id="tool-panel-query" class="tool-subpanel active">
+                  <div class="tool-panel-header" style="margin-bottom: 14px;">
+                    <h4 style="font-size: 16px; font-weight: 600; color: var(--accent-cyan);">JSONPath Query Filter</h4>
+                  </div>
+                  <div class="setting-row" style="margin-bottom: 20px;">
+                    <label for="query-input" style="font-size: 13px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 8px;">Query String (Dot-notation or simple JSONPath):</label>
+                    <div class="search-box" style="max-width: 100%; width: 100%; margin-bottom: 8px; background: var(--bg-input);">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                      <input type="text" id="query-input" placeholder="e.g. departments[0].teams or results[*].username" style="font-family: var(--font-mono); font-size: 13px;">
+                    </div>
+                    <span class="text-muted" style="font-size: 11px;">Examples: <code>category</code>, <code>departments[0].name</code>, <code>departments[*].manager.name</code></span>
+                  </div>
+                  
+                  <div class="code-viewport-header" style="margin-top: 20px;">
+                    <span>Filtered Result</span>
+                    <button id="btn-copy-query-result" class="btn btn-xs btn-secondary">Copy</button>
+                  </div>
+                  <div class="code-content-wrapper" style="max-height: 320px;">
+                    <pre><code id="query-result-pre" class="code-block json-syntax-highlight"><span class="text-muted">Enter a query above to view live results.</span></code></pre>
+                  </div>
+                </div>
+
+                <!-- Subpanel: Converter -->
+                <div id="tool-panel-convert" class="tool-subpanel">
+                  <div class="tool-panel-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
+                    <h4 style="font-size: 16px; font-weight: 600; color: var(--accent-cyan); margin: 0;">YAML & XML Converter</h4>
+                    <div class="editor-actions" style="display: flex; gap: 0;">
+                      <button class="btn btn-xs btn-secondary active" id="btn-convert-yaml" style="border-radius: var(--radius-sm) 0 0 var(--radius-sm); border-right: none;">YAML</button>
+                      <button class="btn btn-xs btn-secondary" id="btn-convert-xml" style="border-radius: 0 var(--radius-sm) var(--radius-sm) 0;">XML</button>
+                    </div>
+                  </div>
+                  
+                  <div class="code-viewport-header" style="margin-top: 16px;">
+                    <span id="convert-output-title">YAML Output</span>
+                    <div style="display: flex; gap: 6px;">
+                      <button id="btn-download-convert" class="btn btn-xs btn-secondary">Download</button>
+                      <button id="btn-copy-convert" class="btn btn-xs btn-secondary">Copy</button>
+                    </div>
+                  </div>
+                  <div class="code-content-wrapper" style="max-height: 340px;">
+                    <pre><code id="convert-result-pre" class="code-block font-mono">YAML converted output will display here.</code></pre>
+                  </div>
+                </div>
+
+                <!-- Subpanel: Flatten/Expand -->
+                <div id="tool-panel-flatten" class="tool-subpanel">
+                  <div class="tool-panel-header" style="margin-bottom: 14px;">
+                    <h4 style="font-size: 16px; font-weight: 600; color: var(--accent-cyan);">Structure Flatten & Expand</h4>
+                  </div>
+                  <p class="section-desc">Flatten collapses nested object structures into single key-value dotted paths. Expand restores dotted paths back to a nested tree structure.</p>
+                  <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                    <button id="btn-tool-flatten" class="btn btn-primary btn-sm" style="flex: 1; padding: 10px 0;">Flatten JSON</button>
+                    <button id="btn-tool-expand" class="btn btn-accent btn-sm" style="flex: 1; padding: 10px 0;">Expand JSON</button>
+                  </div>
+                  
+                  <div class="code-viewport-header">
+                    <span>Transformed Result</span>
+                    <button id="btn-copy-transformed" class="btn btn-xs btn-secondary">Copy</button>
+                  </div>
+                  <div class="code-content-wrapper" style="max-height: 320px;">
+                    <pre><code id="transformed-result-pre" class="code-block json-syntax-highlight"><span class="text-muted">Click Flatten or Expand above to see results.</span></code></pre>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

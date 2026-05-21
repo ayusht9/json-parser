@@ -1443,3 +1443,87 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* JSON Utility Tools Dashboard */
+.tools-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  max-width: 950px;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .tools-layout {
+    grid-template-columns: 240px 1fr;
+  }
+}
+
+.tools-sidebar {
+  padding: 16px;
+}
+
+.tools-sidebar h3 {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  letter-spacing: 0.05em;
+}
+
+.tools-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-menu-btn {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 10px 14px;
+  text-align: left;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+}
+
+.tool-menu-btn:hover {
+  background-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.tool-menu-btn.active {
+  background-color: var(--accent-cyan-glow);
+  color: var(--accent-cyan);
+  border-color: rgba(6, 182, 212, 0.2);
+  font-weight: 600;
+}
+
+.tool-viewport {
+  padding: 24px;
+  min-height: 400px;
+}
+
+.tool-subpanel {
+  display: none;
+}
+
+.tool-subpanel.active {
+  display: block;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.tool-panel-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+

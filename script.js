@@ -63,15 +63,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const gridPageInfo = document.getElementById('grid-page-info');
   const gridPagination = document.getElementById('grid-pagination');
 
+  // JSON Tools Tab Elements
+  const toolMenuButtons = document.querySelectorAll('.tool-menu-btn');
+  const toolSubpanels = document.querySelectorAll('.tool-subpanel');
+  const queryInput = document.getElementById('query-input');
+  const queryResultPre = document.getElementById('query-result-pre');
+  const btnCopyQueryResult = document.getElementById('btn-copy-query-result');
+  const btnConvertYaml = document.getElementById('btn-convert-yaml');
+  const btnConvertXml = document.getElementById('btn-convert-xml');
+  const convertOutputTitle = document.getElementById('convert-output-title');
+  const convertResultPre = document.getElementById('convert-result-pre');
+  const btnDownloadConvert = document.getElementById('btn-download-convert');
+  const btnCopyConvert = document.getElementById('btn-copy-convert');
+  const btnToolFlatten = document.getElementById('btn-tool-flatten');
+  const btnToolExpand = document.getElementById('btn-tool-expand');
+  const transformedResultPre = document.getElementById('transformed-result-pre');
+  const btnCopyTransformed = document.getElementById('btn-copy-transformed');
+
   // --- State Variables ---
   let parsedData = null;
   let activeLanguage = 'curl';
   
   // Grid State
-  let detectedArrays = {}; // Key: JSON path string, Value: Array object reference
+  let detectedArrays = {};
   let selectedArrayPath = '';
   let gridCurrentPage = 1;
   const gridPageSize = 15;
+
+  // Tools State
+  let activeTool = 'query';
+  let activeConvertFormat = 'yaml';
 
   // --- Sample Data Profiles ---
   const samples = {
@@ -421,11 +442,13 @@ document.addEventListener('DOMContentLoaded', () => {
       updateCodeSnippets();
       updateSandboxUrlMethod();
       setupDataGrid(parsed);
+      updateJSONToolsOutputs();
     } catch (err) {
       parsedData = null;
       setParserStatus('invalid');
       let errorMessage = err.message;
       errorConsole.innerHTML = `<div class="console-message text-danger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>${errorMessage}</div>`;
+      clearToolOutputs();
     }
   }
 
@@ -449,6 +472,13 @@ document.addEventListener('DOMContentLoaded', () => {
     gridArraySelect.innerHTML = '<option value="">-- No Array Selected --</option>';
     gridTableContainer.innerHTML = '<span class="text-muted">Load valid JSON and select an array node to display as a grid.</span>';
     gridPagination.style.display = 'none';
+    clearToolOutputs();
+  }
+
+  function clearToolOutputs() {
+    queryResultPre.innerHTML = '<span class="text-muted">Enter a query above to view live results.</span>';
+    convertResultPre.innerHTML = 'XML / YAML converted output will display here.';
+    transformedResultPre.innerHTML = '<span class="text-muted">Click Flatten or Expand above to see results.</span>';
   }
 
   // --- Tab Control Switcher ---
@@ -564,7 +594,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const childList = document.createElement('div');
       childList.className = 'tree-node-list';
 
-      // Progressive Render Parameters
       let keys = isArray ? [] : Object.keys(value);
       const totalItems = isArray ? value.length : keys.length;
       const initialLimit = 40;
@@ -603,7 +632,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       };
 
-      // Load initial batch
       renderBatch(0);
 
       const closingNode = document.createElement('div');
@@ -665,12 +693,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupDataGrid(data) {
     detectedArrays = {};
     gridArraySelect.innerHTML = '';
-    
-    // Concrete recursive array search
     collectConcreteArrays(data, 'root', detectedArrays, 35);
     
     const arrayPaths = Object.keys(detectedArrays);
-    
     if (arrayPaths.length === 0) {
       gridArraySelect.innerHTML = '<option value="">-- No Arrays Found in JSON --</option>';
       gridTableContainer.innerHTML = '<div style="padding:40px; text-align:center;"><span class="text-muted">No Array nodes could be extracted from your JSON structure.</span></div>';
@@ -678,7 +703,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Populate dropdown
     arrayPaths.forEach(path => {
       const option = document.createElement('option');
       option.value = path;
@@ -687,11 +711,9 @@ document.addEventListener('DOMContentLoaded', () => {
       gridArraySelect.appendChild(option);
     });
 
-    // Default to the first found array
     selectedArrayPath = arrayPaths[0];
     gridArraySelect.value = selectedArrayPath;
     gridCurrentPage = 1;
-    
     renderDataGridTable();
   }
 
@@ -702,7 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (Array.isArray(obj)) {
       map[path] = obj;
       obj.forEach((item, index) => {
-        if (index < 2) { // Inspect first 2 items of arrays to find deeper arrays
+        if (index < 2) {
           collectConcreteArrays(item, `${path}[${index}]`, map, limit);
         }
       });
@@ -740,7 +762,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Determine Headers (Union of keys if array consists of objects, otherwise single column "Value")
     let isPrimitiveArray = false;
     let headers = [];
     
@@ -749,7 +770,6 @@ document.addEventListener('DOMContentLoaded', () => {
       headers = ['Index', 'Value'];
     } else {
       headers = ['Index'];
-      // Extract all unique property names across all objects in this array
       const keySet = new Set();
       array.forEach(item => {
         if (item && typeof item === 'object') {
@@ -759,7 +779,6 @@ document.addEventListener('DOMContentLoaded', () => {
       headers = headers.concat(Array.from(keySet));
     }
 
-    // Pagination calculations
     const totalRecords = array.length;
     const totalPages = Math.ceil(totalRecords / gridPageSize);
     gridCurrentPage = Math.max(1, Math.min(gridCurrentPage, totalPages));
@@ -767,14 +786,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const startIndex = (gridCurrentPage - 1) * gridPageSize;
     const endIndex = Math.min(startIndex + gridPageSize, totalRecords);
     
-    // Draw Pagination UI
     gridPagination.style.display = totalRecords > gridPageSize ? 'flex' : 'none';
     gridPageInfo.innerText = `Page ${gridCurrentPage} of ${totalPages} (Records ${startIndex + 1} - ${endIndex} of ${totalRecords})`;
     
     btnGridPrev.disabled = gridCurrentPage === 1;
     btnGridNext.disabled = gridCurrentPage === totalPages;
 
-    // Build Table Elements
     let tableHtml = `<table class="grid-table"><thead><tr>`;
     headers.forEach(h => {
       tableHtml += `<th>${escapeHTML(h)}</th>`;
@@ -784,14 +801,11 @@ document.addEventListener('DOMContentLoaded', () => {
     for (let i = startIndex; i < endIndex; i++) {
       const rowItem = array[i];
       tableHtml += `<tr>`;
-      
-      // Index column
       tableHtml += `<td style="font-family:var(--font-mono); color:var(--text-muted); text-align:center;">${i}</td>`;
       
       if (isPrimitiveArray) {
         tableHtml += `<td>${renderCellContent(rowItem)}</td>`;
       } else {
-        // Render columns based on keys
         for (let colIndex = 1; colIndex < headers.length; colIndex++) {
           const colKey = headers[colIndex];
           const cellVal = rowItem ? rowItem[colKey] : undefined;
@@ -805,7 +819,6 @@ document.addEventListener('DOMContentLoaded', () => {
     gridTableContainer.innerHTML = tableHtml;
   }
 
-  // Custom nested formatter for array columns ("shows columns in cells, normal table for rest")
   function renderCellContent(val) {
     if (val === undefined) {
       return `<span class="text-muted" style="opacity:0.35;">-</span>`;
@@ -815,7 +828,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const type = typeof val;
-
     if (type === 'string') {
       return `<span class="type-string">"${escapeHTML(val)}"</span>`;
     }
@@ -826,26 +838,22 @@ document.addEventListener('DOMContentLoaded', () => {
       return `<span class="type-boolean">${val ? 'true' : 'false'}</span>`;
     }
 
-    // Array logic: Shows sub-table or columns within cell
     if (Array.isArray(val)) {
       if (val.length === 0) return `<span class="text-muted">[]</span>`;
-      
       const isObjectArray = typeof val[0] === 'object' && val[0] !== null;
       
       if (!isObjectArray) {
-        // Primitive list rendering
         return val.map(item => {
           let itemCls = typeof item;
           if (item === null) itemCls = 'null';
           return `<span class="grid-badge grid-badge-${itemCls}">${escapeHTML(String(item))}</span>`;
         }).join(' ');
       } else {
-        // Object Array inside a cell - Render nested table columns
         const subKeys = new Set();
         val.forEach(subObj => {
           if (subObj) Object.keys(subObj).forEach(k => subKeys.add(k));
         });
-        const subHeaders = Array.from(subKeys).slice(0, 4); // limit to 4 sub-columns for layout integrity
+        const subHeaders = Array.from(subKeys).slice(0, 4);
         
         let nestedTable = `<table class="cell-nested-table"><thead><tr>`;
         subHeaders.forEach(sh => {
@@ -853,7 +861,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         nestedTable += `</tr></thead><tbody>`;
         
-        // Show up to 3 sub-rows in the cell to prevent excessive cell heights
         const subRowsCount = Math.min(3, val.length);
         for (let r = 0; r < subRowsCount; r++) {
           nestedTable += `<tr>`;
@@ -878,7 +885,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Object logic: displays key-values list
     if (type === 'object') {
       const keys = Object.keys(val);
       if (keys.length === 0) return `<span class="text-muted">{}</span>`;
@@ -902,7 +908,6 @@ document.addEventListener('DOMContentLoaded', () => {
       objList += `</div>`;
       return objList;
     }
-
     return String(val);
   }
 
@@ -916,7 +921,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   }
 
-  // Grid pagination handlers
   btnGridPrev.addEventListener('click', () => {
     if (gridCurrentPage > 1) {
       gridCurrentPage--;
@@ -935,7 +939,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // CSV Export utility
   btnGridExport.addEventListener('click', () => {
     const array = detectedArrays[selectedArrayPath];
     if (!array || array.length === 0) {
@@ -961,10 +964,8 @@ document.addEventListener('DOMContentLoaded', () => {
       headers = headers.concat(Array.from(keySet));
     }
 
-    // Add Headers row
     csvContent += headers.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\r\n";
 
-    // Add rows
     array.forEach((rowItem, index) => {
       const rowCells = [String(index)];
       if (isPrimitiveArray) {
@@ -991,9 +992,358 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
     showToast('Grid exported to CSV successfully', 'success');
   });
+
+  // --- Tab 6: JSON Tools Suite Handlers ---
+  toolMenuButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      toolMenuButtons.forEach(b => b.classList.remove('active'));
+      toolSubpanels.forEach(p => p.classList.remove('active'));
+      
+      btn.classList.add('active');
+      activeTool = btn.getAttribute('data-tool');
+      document.getElementById(`tool-panel-${activeTool}`).classList.add('active');
+      triggerToolExecution();
+    });
+  });
+
+  queryInput.addEventListener('input', () => {
+    if (activeTool === 'query') {
+      runQueryFilter();
+    }
+  });
+
+  btnCopyQueryResult.addEventListener('click', () => {
+    const text = queryResultPre.innerText;
+    if (text.startsWith('Enter a query') || text.startsWith('Query returns no')) {
+      showToast('No query output to copy', 'error');
+      return;
+    }
+    copyTextToClipboard(text);
+    showToast('Copied filtered result to clipboard', 'success');
+  });
+
+  btnConvertYaml.addEventListener('click', () => {
+    btnConvertYaml.classList.add('active');
+    btnConvertXml.classList.remove('active');
+    activeConvertFormat = 'yaml';
+    convertOutputTitle.innerText = 'YAML Output';
+    runConverter();
+  });
+
+  btnConvertXml.addEventListener('click', () => {
+    btnConvertXml.classList.add('active');
+    btnConvertYaml.classList.remove('active');
+    activeConvertFormat = 'xml';
+    convertOutputTitle.innerText = 'XML Output';
+    runConverter();
+  });
+
+  btnCopyConvert.addEventListener('click', () => {
+    const text = convertResultPre.innerText;
+    if (text.startsWith('XML / YAML') || text.startsWith('Select a target')) {
+      showToast('No conversion output to copy', 'error');
+      return;
+    }
+    copyTextToClipboard(text);
+    showToast('Copied converted output to clipboard', 'success');
+  });
+
+  btnDownloadConvert.addEventListener('click', () => {
+    const text = convertResultPre.innerText;
+    if (text.startsWith('XML / YAML') || text.startsWith('Select a target')) {
+      showToast('No conversion output to download', 'error');
+      return;
+    }
+    const mime = activeConvertFormat === 'yaml' ? 'text/yaml' : 'application/xml';
+    const ext = activeConvertFormat === 'yaml' ? 'yaml' : 'xml';
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `aerojson_converted.${ext}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`Downloaded converted ${ext.toUpperCase()} file`, 'success');
+  });
+
+  btnToolFlatten.addEventListener('click', () => {
+    if (!parsedData) {
+      showToast('No valid JSON to flatten', 'error');
+      return;
+    }
+    const flat = flattenObject(parsedData);
+    const text = JSON.stringify(flat, null, 2);
+    transformedResultPre.innerHTML = syntaxHighlightJson(text);
+    showToast('JSON structures flattened', 'success');
+  });
+
+  btnToolExpand.addEventListener('click', () => {
+    if (!parsedData) {
+      showToast('No valid JSON to expand', 'error');
+      return;
+    }
+    try {
+      // Validate that active json is flat or contains keys with dots
+      const expanded = expandObject(parsedData);
+      const text = JSON.stringify(expanded, null, 2);
+      transformedResultPre.innerHTML = syntaxHighlightJson(text);
+      showToast('Dotted properties expanded', 'success');
+    } catch (e) {
+      showToast('Failed to expand. Source must be flat dotted keys.', 'error');
+    }
+  });
+
+  btnCopyTransformed.addEventListener('click', () => {
+    const text = transformedResultPre.innerText;
+    if (text.includes('Click Flatten or Expand')) {
+      showToast('No transformation output to copy', 'error');
+      return;
+    }
+    copyTextToClipboard(text);
+    showToast('Copied transformed result to clipboard', 'success');
+  });
+
+  function updateJSONToolsOutputs() {
+    if (!parsedData) return;
+    runQueryFilter();
+    runConverter();
+  }
+
+  function triggerToolExecution() {
+    if (!parsedData) return;
+    if (activeTool === 'query') runQueryFilter();
+    else if (activeTool === 'convert') runConverter();
+  }
+
+  // Live Query Filter Engine (JSONPath Wildcard Dot-Notation parser)
+  function runQueryFilter() {
+    if (!parsedData) {
+      queryResultPre.innerHTML = '<span class="text-muted">Enter a query above to view live results.</span>';
+      return;
+    }
+    const query = queryInput.value.trim();
+    if (!query) {
+      queryResultPre.innerHTML = syntaxHighlightJson(JSON.stringify(parsedData, null, 2));
+      return;
+    }
+
+    try {
+      const result = evaluateQuery(parsedData, query);
+      if (result === undefined) {
+        queryResultPre.innerHTML = '<span class="text-danger">Query returns no matching properties.</span>';
+      } else {
+        queryResultPre.innerHTML = syntaxHighlightJson(JSON.stringify(result, null, 2));
+      }
+    } catch (e) {
+      queryResultPre.innerHTML = `<span class="text-danger">Invalid query syntax: ${e.message}</span>`;
+    }
+  }
+
+  function evaluateQuery(data, queryStr) {
+    if (!queryStr.trim()) return data;
+    
+    // Normalize bracket queries e.g. results[0] or departments["teams"] to dotted paths
+    let normalized = queryStr
+      .replace(/\[['"]?([^'"]+?)['"]?\]/g, '.$1')
+      .replace(/^\./, '');
+      
+    const parts = normalized.split('.');
+    let current = data;
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (current === null || current === undefined) return undefined;
+
+      if (part === '*') {
+        if (Array.isArray(current)) {
+          const remainingQuery = parts.slice(i + 1).join('.');
+          if (!remainingQuery) return current;
+          return current.map(item => evaluateQuery(item, remainingQuery)).filter(x => x !== undefined);
+        }
+        return undefined;
+      }
+
+      if (Array.isArray(current) && !isNaN(part)) {
+        current = current[parseInt(part)];
+      } else if (typeof current === 'object') {
+        current = current[part];
+      } else {
+        return undefined;
+      }
+    }
+    return current;
+  }
+
+  // live XML & YAML Serializer Engines
+  function runConverter() {
+    if (!parsedData) {
+      convertResultPre.innerText = 'XML / YAML converted output will display here.';
+      return;
+    }
+
+    if (activeConvertFormat === 'yaml') {
+      const yaml = jsonToYaml(parsedData);
+      convertResultPre.innerText = yaml;
+    } else {
+      const xml = jsonToXml(parsedData, 'root');
+      convertResultPre.innerText = xml;
+    }
+  }
+
+  function jsonToYaml(obj, indent = 0) {
+    const spaces = ' '.repeat(indent);
+    if (obj === null) return 'null';
+    if (typeof obj === 'string') {
+      if (/[^a-zA-Z0-9\s]/.test(obj) || obj.includes('\n')) {
+        return `"${obj.replace(/"/g, '\\"')}"`;
+      }
+      return obj;
+    }
+    if (typeof obj === 'number' || typeof obj === 'boolean') {
+      return String(obj);
+    }
+    if (Array.isArray(obj)) {
+      if (obj.length === 0) return '[]';
+      let yaml = '';
+      obj.forEach(item => {
+        if (typeof item === 'object' && item !== null) {
+          const sub = jsonToYaml(item, indent + 2);
+          const lines = sub.split('\n');
+          yaml += `${spaces}- ${lines[0].trim()}\n`;
+          for (let i = 1; i < lines.length; i++) {
+            yaml += `  ${lines[i]}\n`;
+          }
+        } else {
+          yaml += `${spaces}- ${jsonToYaml(item, 0)}\n`;
+        }
+      });
+      return yaml.trimEnd();
+    }
+    if (typeof obj === 'object') {
+      const keys = Object.keys(obj);
+      if (keys.length === 0) return '{}';
+      let yaml = '';
+      keys.forEach(key => {
+        const val = obj[key];
+        if (typeof val === 'object' && val !== null) {
+          yaml += `${spaces}${key}:\n${jsonToYaml(val, indent + 2)}\n`;
+        } else {
+          yaml += `${spaces}${key}: ${jsonToYaml(val, 0)}\n`;
+        }
+      });
+      return yaml.trimEnd();
+    }
+    return '';
+  }
+
+  function jsonToXml(obj, rootName = 'root', indent = 0) {
+    const spaces = ' '.repeat(indent);
+    if (obj === null) return `${spaces}<${rootName} nil="true" />`;
+    const type = typeof obj;
+
+    if (type === 'string' || type === 'number' || type === 'boolean') {
+      return `${spaces}<${rootName}>${escapeXml(String(obj))}</${rootName}>`;
+    }
+
+    if (Array.isArray(obj)) {
+      let xml = '';
+      obj.forEach(item => {
+        xml += jsonToXml(item, 'item', indent) + '\n';
+      });
+      return xml.trimEnd();
+    }
+
+    if (type === 'object') {
+      let xml = `${spaces}<${rootName}>\n`;
+      for (const key in obj) {
+        const val = obj[key];
+        const cleanKey = key.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        if (Array.isArray(val)) {
+          xml += `${spaces}  <${cleanKey}>\n`;
+          val.forEach(item => {
+            xml += jsonToXml(item, 'element', indent + 4) + '\n';
+          });
+          xml += `${spaces}  </${cleanKey}>\n`;
+        } else {
+          xml += jsonToXml(val, cleanKey, indent + 2) + '\n';
+        }
+      }
+      xml += `${spaces}</${rootName}>`;
+      return xml;
+    }
+    return '';
+  }
+
+  function escapeXml(unsafe) {
+    return unsafe.replace(/[<>&'"]/g, function (c) {
+      switch (c) {
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '&': return '&amp;';
+        case '\'': return '&apos;';
+        case '"': return '&quot;';
+      }
+      return c;
+    });
+  }
+
+  // Dotted Key Flattener Algorithms
+  function flattenObject(obj, prefix = '', result = {}) {
+    if (obj === null) {
+      result[prefix] = null;
+      return result;
+    }
+
+    if (Array.isArray(obj)) {
+      if (obj.length === 0) {
+        result[prefix] = [];
+      } else {
+        obj.forEach((item, index) => {
+          flattenObject(item, prefix ? `${prefix}.${index}` : `${index}`, result);
+        });
+      }
+    } else if (typeof obj === 'object') {
+      const keys = Object.keys(obj);
+      if (keys.length === 0) {
+        result[prefix] = {};
+      } else {
+        keys.forEach(key => {
+          flattenObject(obj[key], prefix ? `${prefix}.${key}` : key, result);
+        });
+      }
+    } else {
+      result[prefix] = obj;
+    }
+    return result;
+  }
+
+  function expandObject(flatObj) {
+    const result = {};
+    for (const key in flatObj) {
+      const parts = key.split('.');
+      let current = result;
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const isLast = i === parts.length - 1;
+        const nextPart = parts[i + 1];
+        const isNextIndex = nextPart !== undefined && !isNaN(nextPart);
+        
+        if (isLast) {
+          current[part] = flatObj[key];
+        } else {
+          if (current[part] === undefined) {
+            current[part] = isNextIndex ? [] : {};
+          }
+          current = current[part];
+        }
+      }
+    }
+    return result;
+  }
 
   // --- Tab 1: Swagger Docs Generation ---
   function generateSwaggerSchema(data) {
