@@ -327,7 +327,8 @@ body {
   resize: none;
   outline: none;
   overflow-y: auto;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 #json-input::placeholder {
@@ -1546,4 +1547,62 @@ body {
   margin-bottom: 16px;
 }
 
+/* Collapsed Dock Bars */
+.collapsed-dock-bar {
+  width: 42px;
+  background-color: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--transition-fast);
+  flex-shrink: 0;
+  height: 100%;
+}
 
+.collapsed-dock-bar:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.collapsed-dock-bar:hover .dock-icon {
+  color: var(--accent-cyan);
+}
+
+.dock-icon {
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  transition: color var(--transition-fast);
+}
+
+.dock-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Tab Collapse Button */
+.tab-btn-collapse {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 16px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 1px solid var(--border-color);
+  transition: all var(--transition-fast);
+}
+
+.tab-btn-collapse:hover {
+  color: var(--accent-rose);
+  background-color: rgba(244, 63, 94, 0.05);
+}

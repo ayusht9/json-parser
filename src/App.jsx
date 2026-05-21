@@ -628,6 +628,10 @@ export default function App() {
   const [editorWidth, setEditorWidth] = useState(500);
   const isDragging = useRef(false);
 
+  // Collapse/Minimize States
+  const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
+  const [isViewerCollapsed, setIsViewerCollapsed] = useState(false);
+
   const handleMouseDown = (e) => {
     e.preventDefault();
     isDragging.current = true;
@@ -865,85 +869,141 @@ export default function App() {
       {/* Main Layout Workspace Grid */}
       <main className="workspace">
         {/* Left Pane: Editor */}
-        <section className="pane pane-editor" style={{ width: `${editorWidth}px`, flex: 'none' }}>
-          <div className="pane-header">
-            <h2>JSON INPUT EDITOR</h2>
-            <div className="editor-actions">
-              <button className="btn btn-sm btn-primary" onClick={formatJSON}>Format</button>
-              <button className="btn btn-sm btn-secondary" onClick={minifyJSON}>Minify</button>
-              <button className="btn btn-sm btn-secondary" onClick={copyInput}>Copy</button>
-              <button className="btn btn-sm btn-danger" onClick={clearInput}>Clear</button>
+        {isEditorCollapsed ? (
+          <div 
+            className="collapsed-dock-bar" 
+            onClick={() => setIsEditorCollapsed(false)}
+            title="Expand Input Editor"
+            style={{ borderRight: '1px solid var(--border-color)' }}
+          >
+            <div className="dock-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="13 17 18 12 13 7"></polyline>
+                <polyline points="6 17 11 12 6 7"></polyline>
+              </svg>
             </div>
+            <span className="dock-title">Expand Editor</span>
           </div>
+        ) : (
+          <section className="pane pane-editor" style={{ width: isViewerCollapsed ? '100%' : `${editorWidth}px`, flex: isViewerCollapsed ? '1' : 'none' }}>
+            <div className="pane-header">
+              <h2>JSON INPUT EDITOR</h2>
+              <div className="editor-actions">
+                <button className="btn btn-sm btn-primary" onClick={formatJSON}>Format</button>
+                <button className="btn btn-sm btn-secondary" onClick={minifyJSON}>Minify</button>
+                <button className="btn btn-sm btn-secondary" onClick={copyInput}>Copy</button>
+                <button className="btn btn-sm btn-danger" onClick={clearInput}>Clear</button>
+                <button 
+                  className="btn btn-sm btn-secondary icon-btn-only" 
+                  onClick={() => setIsEditorCollapsed(true)}
+                  title="Minimize Editor"
+                  style={{ padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="11 17 6 12 11 7"></polyline>
+                    <polyline points="18 17 13 12 18 7"></polyline>
+                  </svg>
+                </button>
+              </div>
+            </div>
 
-          <div className="editor-wrapper card">
-            <div className="line-numbers" ref={lineNumbersRef}>
-              {lines.map((_, i) => <span key={i}>{i + 1}</span>)}
+            <div className="editor-wrapper card">
+              <div className="line-numbers" ref={lineNumbersRef}>
+                {lines.map((_, i) => <span key={i}>{i + 1}</span>)}
+              </div>
+              <textarea
+                id="json-input"
+                ref={editorRef}
+                value={inputText}
+                onChange={handleInputChange}
+                onScroll={handleEditorScroll}
+                placeholder='Paste or write your JSON here...'
+                spellCheck="false"
+              />
             </div>
-            <textarea
-              id="json-input"
-              ref={editorRef}
-              value={inputText}
-              onChange={handleInputChange}
-              onScroll={handleEditorScroll}
-              placeholder='Paste or write your JSON here...'
-              spellCheck="false"
-            />
-          </div>
 
-          <div className="console-panel card">
-            <div className="console-header">Console Output</div>
-            <div id="error-console" className="console-viewport">
-              {syntaxError ? (
-                <div className="console-message text-danger">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  {syntaxError}
-                </div>
-              ) : parsedData ? (
-                <div className="console-message text-success">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  JSON parsed successfully. Ready.
-                </div>
-              ) : (
-                <div className="console-message text-muted">Ready to parse JSON data.</div>
-              )}
+            <div className="console-panel card">
+              <div className="console-header">Console Output</div>
+              <div id="error-console" className="console-viewport">
+                {syntaxError ? (
+                  <div className="console-message text-danger">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    {syntaxError}
+                  </div>
+                ) : parsedData ? (
+                  <div className="console-message text-success">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    JSON parsed successfully. Ready.
+                  </div>
+                ) : (
+                  <div className="console-message text-muted">Ready to parse JSON data.</div>
+                )}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Resizable Divider */}
-        <div className="workspace-divider" onMouseDown={handleMouseDown} />
+        {!isEditorCollapsed && !isViewerCollapsed && (
+          <div className="workspace-divider" onMouseDown={handleMouseDown} />
+        )}
 
         {/* Right Pane: Visualizers */}
-        <section className="pane pane-viewer">
-          <div className="pane-header tabs-header">
-            <nav className="tabs-nav">
-              <button className={`tab-btn ${activeTab === 'swagger' ? 'active' : ''}`} onClick={() => setActiveTab('swagger')}>
-                <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                <span>Swagger Spec Docs</span>
-              </button>
-              <button className={`tab-btn ${activeTab === 'tree' ? 'active' : ''}`} onClick={() => setActiveTab('tree')}>
-                <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-                <span>Interactive Tree</span>
-              </button>
-              <button className={`tab-btn ${activeTab === 'grid' ? 'active' : ''}`} onClick={() => setActiveTab('grid')}>
-                <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
-                <span>Data Grid</span>
-              </button>
-              <button className={`tab-btn ${activeTab === 'tools' ? 'active' : ''}`} onClick={() => setActiveTab('tools')}>
-                <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-                <span>JSON Tools</span>
-              </button>
-              <button className={`tab-btn ${activeTab === 'sandbox' ? 'active' : ''}`} onClick={() => setActiveTab('sandbox')}>
-                <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-                <span>API Sandbox</span>
-              </button>
-              <button className={`tab-btn ${activeTab === 'code' ? 'active' : ''}`} onClick={() => setActiveTab('code')}>
-                <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-                <span>Code Snippets</span>
-              </button>
-            </nav>
+        {isViewerCollapsed ? (
+          <div 
+            className="collapsed-dock-bar" 
+            onClick={() => setIsViewerCollapsed(false)}
+            title="Expand Visualizer Tools"
+            style={{ borderLeft: '1px solid var(--border-color)' }}
+          >
+            <div className="dock-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="11 17 6 12 11 7"></polyline>
+                <polyline points="18 17 13 12 18 7"></polyline>
+              </svg>
+            </div>
+            <span className="dock-title">Expand Visualizers</span>
           </div>
+        ) : (
+          <section className="pane pane-viewer">
+            <div className="pane-header tabs-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <nav className="tabs-nav" style={{ flex: 1 }}>
+                <button className={`tab-btn ${activeTab === 'swagger' ? 'active' : ''}`} onClick={() => setActiveTab('swagger')}>
+                  <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                  <span>Swagger Spec Docs</span>
+                </button>
+                <button className={`tab-btn ${activeTab === 'tree' ? 'active' : ''}`} onClick={() => setActiveTab('tree')}>
+                  <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                  <span>Interactive Tree</span>
+                </button>
+                <button className={`tab-btn ${activeTab === 'grid' ? 'active' : ''}`} onClick={() => setActiveTab('grid')}>
+                  <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
+                  <span>Data Grid</span>
+                </button>
+                <button className={`tab-btn ${activeTab === 'tools' ? 'active' : ''}`} onClick={() => setActiveTab('tools')}>
+                  <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                  <span>JSON Tools</span>
+                </button>
+                <button className={`tab-btn ${activeTab === 'sandbox' ? 'active' : ''}`} onClick={() => setActiveTab('sandbox')}>
+                  <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                  <span>API Sandbox</span>
+                </button>
+                <button className={`tab-btn ${activeTab === 'code' ? 'active' : ''}`} onClick={() => setActiveTab('code')}>
+                  <svg className="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                  <span>Code Snippets</span>
+                </button>
+              </nav>
+              <button 
+                className="tab-btn-collapse"
+                onClick={() => setIsViewerCollapsed(true)}
+                title="Collapse Visualizers"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="13 17 18 12 13 7"></polyline>
+                  <polyline points="6 17 11 12 6 7"></polyline>
+                </svg>
+              </button>
+            </div>
 
           <div className="tabs-content">
             {/* Tab: Swagger Spec */}
@@ -1073,6 +1133,7 @@ export default function App() {
             )}
           </div>
         </section>
+        )}
       </main>
     </div>
   );
