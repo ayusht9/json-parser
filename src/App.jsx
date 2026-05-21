@@ -186,13 +186,28 @@ function useToasts() {
 }
 
 // --- Recursive Tree Component ---
-function TreeNode({ nodeKey, value, isLast = true, displayKey = null }) {
+function TreeNode({ nodeKey, value, isLast = true, displayKey = null, path = "$", addToast, expandCounter, collapseCounter }) {
   const [expanded, setExpanded] = useState(true);
   const [limit, setLimit] = useState(40);
+  const [showActions, setShowActions] = useState(false);
+
+  useEffect(() => {
+    if (expandCounter > 0) {
+      setExpanded(true);
+    }
+  }, [expandCounter]);
+
+  useEffect(() => {
+    if (collapseCounter > 0) {
+      setExpanded(false);
+    }
+  }, [collapseCounter]);
   
   const type = typeof value;
   const isObject = value !== null && type === 'object';
   const isArray = Array.isArray(value);
+  const keys = isObject && !isArray ? Object.keys(value) : [];
+  const totalItems = isObject ? (isArray ? value.length : keys.length) : 0;
 
   const toggleExpanded = (e) => {
     e.stopPropagation();
@@ -204,95 +219,134 @@ function TreeNode({ nodeKey, value, isLast = true, displayKey = null }) {
     setLimit(prev => prev + 40);
   };
 
-  const renderValueNode = () => {
+  const handleCopyPath = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(path);
+    addToast('JSONPath copied to clipboard!', 'success');
+  };
+
+  const handleCopyValue = (e) => {
+    e.stopPropagation();
+    const valStr = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+    navigator.clipboard.writeText(valStr);
+    addToast('Node value copied to clipboard!', 'success');
+  };
+
+  const renderValueInline = () => {
     if (value === null) return <span className="type-null">null</span>;
     if (type === 'string') return <span className="type-string">"{value}"</span>;
     if (type === 'number') return <span className="type-number">{value}</span>;
     if (type === 'boolean') return <span className="type-boolean">{value ? 'true' : 'false'}</span>;
     
     const openBracket = isArray ? '[' : '{';
-    const closeBracket = isArray ? ']' : '}';
-    const keys = isArray ? [] : Object.keys(value);
-    const totalItems = isArray ? value.length : keys.length;
-
     return (
       <>
         <span className="tree-bracket">{openBracket}</span>
         <span className="tree-node-info">
           {isArray ? `${totalItems} items` : `${totalItems} keys`}
         </span>
-        
-        {expanded && (
-          <div className="tree-node-children">
-            <div className="tree-node-list">
-              {isArray ? (
-                value.slice(0, limit).map((item, idx) => (
-                  <TreeNode 
-                    key={idx} 
-                    nodeKey={idx.toString()} 
-                    value={item} 
-                    isLast={idx === totalItems - 1} 
-                    displayKey={idx.toString()} 
-                  />
-                ))
-              ) : (
-                keys.slice(0, limit).map((k, idx) => (
-                  <TreeNode 
-                    key={k} 
-                    nodeKey={k} 
-                    value={value[k]} 
-                    isLast={idx === totalItems - 1} 
-                  />
-                ))
-              )}
-              
-              {totalItems > limit && (
-                <div className="tree-node" style={{ marginLeft: '18px' }} onClick={showMore}>
-                  <span style={{ color: 'var(--accent-cyan)', cursor: 'pointer', textDecoration: 'underline', fontSize: '12px' }}>
-                    [Show next {totalItems - limit} items...]
-                  </span>
-                </div>
-              )}
-            </div>
-            
-            <div className="tree-node" style={{ marginLeft: '18px' }}>
-              <div className="tree-node-content">
-                <span style={{ width: '14px', display: 'inline-block' }}></span>
-                <span className="tree-bracket">{closeBracket}</span>
-              </div>
-            </div>
-          </div>
-        )}
       </>
     );
   };
 
   return (
     <div className="tree-node">
-      <div className="tree-node-content">
-        {isObject ? (
-          <span className={`tree-toggle-icon ${expanded ? 'expanded' : ''}`} onClick={toggleExpanded}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-          </span>
-        ) : (
-          <span style={{ width: '14px', display: 'inline-block' }}></span>
-        )}
+      <div 
+        className="tree-node-row"
+        onMouseEnter={() => setShowActions(true)}
+        onMouseLeave={() => setShowActions(false)}
+      >
+        <div className="tree-node-content">
+          {isObject ? (
+            <span className={`tree-toggle-icon ${expanded ? 'expanded' : ''}`} onClick={toggleExpanded}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </span>
+          ) : (
+            <span style={{ width: '14px', display: 'inline-block' }}></span>
+          )}
 
-        {(displayKey !== null || nodeKey) && (
-          <>
-            <span className="tree-key">{displayKey !== null ? displayKey : `"${nodeKey}"`}</span>
-            <span className="tree-colon">: </span>
-          </>
+          {(displayKey !== null || nodeKey) && (
+            <>
+              <span className="tree-key">{displayKey !== null ? displayKey : `"${nodeKey}"`}</span>
+              <span className="tree-colon">: </span>
+            </>
+          )}
+          {renderValueInline()}
+        </div>
+
+        {showActions && (
+          <div className="tree-node-actions animate-fade-in">
+            <span className="tree-node-path-badge" title={path}>{path}</span>
+            <button className="tree-action-btn" onClick={handleCopyPath} title="Copy JSONPath">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Path</span>
+            </button>
+            <button className="tree-action-btn" onClick={handleCopyValue} title="Copy Node Value">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
+              <span>Value</span>
+            </button>
+          </div>
         )}
-        {renderValueNode()}
       </div>
+
+      {isObject && (
+        <div className="tree-node-children" style={{ display: expanded ? 'block' : 'none' }}>
+          <div className="tree-node-list">
+            {isArray ? (
+              value.slice(0, limit).map((item, idx) => (
+                <TreeNode 
+                  key={idx} 
+                  nodeKey={idx.toString()} 
+                  value={item} 
+                  isLast={idx === totalItems - 1} 
+                  displayKey={idx.toString()} 
+                  path={`${path}[${idx}]`}
+                  addToast={addToast}
+                  expandCounter={expandCounter}
+                  collapseCounter={collapseCounter}
+                />
+              ))
+            ) : (
+              keys.slice(0, limit).map((k, idx) => (
+                <TreeNode 
+                  key={k} 
+                  nodeKey={k} 
+                  value={value[k]} 
+                  isLast={idx === totalItems - 1} 
+                  path={/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k) ? `${path}.${k}` : `${path}["${k.replace(/"/g, '\"')}"]`}
+                  addToast={addToast}
+                  expandCounter={expandCounter}
+                  collapseCounter={collapseCounter}
+                />
+              ))
+            )}
+            
+            {totalItems > limit && (
+              <div className="tree-node-row show-more-row" onClick={showMore}>
+                <span className="tree-show-more-text">
+                  Show next {totalItems - limit} items...
+                </span>
+              </div>
+            )}
+          </div>
+          
+          <div className="tree-node-row closing-bracket-row">
+            <span style={{ width: '14px', display: 'inline-block' }}></span>
+            <span className="tree-bracket">{isArray ? ']' : '}'}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-// --- Dynamic Syntax Highlighter ---
 function syntaxHighlight(json) {
   if (typeof json !== 'string') {
     json = JSON.stringify(json, undefined, 2);
@@ -631,6 +685,8 @@ export default function App() {
   // Collapse/Minimize States
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
   const [isViewerCollapsed, setIsViewerCollapsed] = useState(false);
+  const [treeExpandCounter, setTreeExpandCounter] = useState(0);
+  const [treeCollapseCounter, setTreeCollapseCounter] = useState(0);
 
   const handleMouseDown = (e) => {
     e.preventDefault();
@@ -1084,7 +1140,7 @@ export default function App() {
                       placeholder="Search property keys or values..."
                       onChange={(e) => {
                         const val = e.target.value.toLowerCase();
-                        document.querySelectorAll('.tree-node-content').forEach(el => {
+                        document.querySelectorAll('.tree-node-row').forEach(el => {
                           if (val && el.innerText.toLowerCase().includes(val)) {
                             el.classList.add('search-match');
                           } else {
@@ -1094,13 +1150,26 @@ export default function App() {
                       }}
                     />
                   </div>
+                  <div className="tree-actions">
+                    <button className="btn btn-sm btn-secondary" onClick={() => setTreeExpandCounter(prev => prev + 1)}>Expand All</button>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setTreeCollapseCounter(prev => prev + 1)}>Collapse All</button>
+                  </div>
                 </div>
 
                 <div className="tree-viewport card">
                   <div id="tree-root">
                     {parsedData ? (
                       <div className="tree-node-list">
-                        <TreeNode nodeKey="" value={parsedData} isLast={true} displayKey="Root" />
+                        <TreeNode 
+                          nodeKey="" 
+                          value={parsedData} 
+                          isLast={true} 
+                          displayKey="Root" 
+                          path="$" 
+                          addToast={addToast} 
+                          expandCounter={treeExpandCounter}
+                          collapseCounter={treeCollapseCounter}
+                        />
                       </div>
                     ) : (
                       <span className="text-muted">Enter valid JSON in the editor to visualize as an interactive tree.</span>
@@ -1109,8 +1178,6 @@ export default function App() {
                 </div>
               </div>
             )}
-
-            {/* Tab: Data Grid */}
             {activeTab === 'grid' && (
               <div className="tab-panel active">
                 <GridTab data={parsedData} />
