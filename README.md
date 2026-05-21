@@ -35,35 +35,23 @@ A professional, dark-themed **JSON parsing and API testing workbench** built wit
 - **Node.js** ≥ 18
 - **npm** ≥ 9
 
-### 1. Install dependencies
-```bash
-npm install
-```
+### Development mode
 
-### 2. Start the dev server (frontend only, with HMR)
 ```bash
-npm run dev
+npm install        # Install dependencies
+npm run dev        # Start Vite dev server with HMR
 ```
-Open [http://localhost:5173](http://localhost:5173)
+→ [http://localhost:5173](http://localhost:5173)
 
-### 3. Start the Express API server (backend only)
-```bash
-npm run server
-```
-Runs on [http://localhost:5000](http://localhost:5000)
+---
 
-### 4. Build for production
-```bash
-npm run build
-```
-Outputs compiled assets to `dist/`.
+### Production mode
 
-### 5. Serve the production build locally
 ```bash
-npm run server
+npm run build      # Compile React app into dist/
+npm run server     # Serve dist/ and /api/mock via Express
 ```
-The Express server serves `dist/` statically and handles API routes at `/api/mock`.  
-Open [http://localhost:5000](http://localhost:5000)
+→ [http://localhost:5000](http://localhost:5000)
 
 ---
 
@@ -73,37 +61,29 @@ Open [http://localhost:5000](http://localhost:5000)
 - **Docker** ≥ 20
 - **Docker Compose** ≥ 2 (optional but recommended)
 
-### Build & run with Docker Compose (recommended)
-```bash
-docker compose up --build
-```
-Open [http://localhost:5000](http://localhost:5000)
+> **Port note:** Docker maps host port **3000** → container port **5000** to avoid conflicts with a local dev server already running on 5000. App is accessible at [http://localhost:3000](http://localhost:3000).
 
-To run in the background:
-```bash
-docker compose up --build -d
-```
+### Docker Compose _(recommended)_
 
-To stop:
 ```bash
-docker compose down
+docker compose up --build        # Build & start
+docker compose up --build -d     # Build & start in background
+docker compose logs -f           # Stream logs
+docker compose down              # Stop & remove
 ```
+→ [http://localhost:3000](http://localhost:3000)
 
 ---
 
-### Build & run with plain Docker
-```bash
-# Build the image
-docker build -t aerojson .
+### Plain Docker
 
-# Run the container
-docker run -p 5000:5000 aerojson
-```
-
-To override the port:
 ```bash
-docker run -p 8080:8080 -e PORT=8080 aerojson
+docker build -t aerojson .                              # Build image
+docker run -p 3000:5000 -d --name aerojson-app aerojson # Run container
+docker logs -f aerojson-app                             # Stream logs
+docker stop aerojson-app && docker rm aerojson-app      # Stop & remove
 ```
+→ [http://localhost:3000](http://localhost:3000)
 
 ---
 
