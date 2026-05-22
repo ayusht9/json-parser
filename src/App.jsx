@@ -374,25 +374,60 @@ function syntaxHighlight(json) {
 function GridTab({ data }) {
   const [detectedArrays, setDetectedArrays] = useState({});
   const [selectedPath, setSelectedPath] = useState('');
+  const [pathHistory, setPathHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
   const [currentPage, setCurrentPage] = useState(1);
   const [gridSearch, setGridSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [isTransposed, setIsTransposed] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [focusedSuggestionIndex, setFocusedSuggestionIndex] = useState(-1);
   const pageSize = 15;
+
+  const handleSelectPath = (newPath, isHistoryAction = false) => {
+    if (newPath === selectedPath) return;
+    if (!isHistoryAction) {
+      const newHistory = pathHistory.slice(0, historyIndex + 1);
+      newHistory.push(newPath);
+      setPathHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
+    }
+    setSelectedPath(newPath);
+    setCurrentPage(1);
+  };
+
+  const goBack = () => {
+    if (historyIndex > 0) {
+      const prevPath = pathHistory[historyIndex - 1];
+      setHistoryIndex(historyIndex - 1);
+      setSelectedPath(prevPath);
+      setCurrentPage(1);
+    }
+  };
+
+  const goForward = () => {
+    if (historyIndex < pathHistory.length - 1) {
+      const nextPath = pathHistory[historyIndex + 1];
+      setHistoryIndex(historyIndex + 1);
+      setSelectedPath(nextPath);
+      setCurrentPage(1);
+    }
+  };
 
   useEffect(() => {
     const list = {};
     const collectArrays = (obj, path, depth = 0) => {
-      if (depth > 10) return; // Prevent stack overflow on deeply nested JSON
-      if (Object.keys(list).length >= 35) return;
+      if (depth > 20) return; // Prevent stack overflow on deeply nested JSON
+      if (Object.keys(list).length >= 2000) return;
       if (obj === null || typeof obj !== 'object') return;
       
       if (Array.isArray(obj)) {
         list[path] = obj;
         obj.forEach((item, index) => {
-          if (index < 2) collectArrays(item, `${path}[${index}]`, depth + 1);
+          if (index < 20) collectArrays(item, `${path}[${index}]`, depth + 1);
         });
       } else {
+        list[path] = [obj];
         let keysChecked = 0;
         for (const key in obj) {
           if (keysChecked++ > 50) break; // Limit scanning to 50 keys per object to prevent crashing
@@ -409,7 +444,7 @@ function GridTab({ data }) {
             if (Array.isArray(val)) {
               list[nextPath] = val;
               val.forEach((item, index) => {
-                if (index < 2) collectArrays(item, `${nextPath}[${index}]`, depth + 1);
+                if (index < 20) collectArrays(item, `${nextPath}[${index}]`, depth + 1);
               });
             } else {
               collectArrays(val, nextPath, depth + 1);
@@ -429,14 +464,56 @@ function GridTab({ data }) {
     const paths = Object.keys(list);
     if (paths.length > 0) {
       setSelectedPath(paths[0]);
+      setPathHistory([paths[0]]);
+      setHistoryIndex(0);
       setCurrentPage(1);
     } else {
       setSelectedPath('');
+      setPathHistory([]);
+      setHistoryIndex(-1);
     }
   }, [data]);
 
   const paths = Object.keys(detectedArrays);
-  const activeArray = detectedArrays[selectedPath] || [];
+
+  const filteredPaths = React.useMemo(() => {
+    if (!gridSearch || !gridSearch.trim().startsWith('$')) return paths;
+    return paths.filter(p => p.toLowerCase().includes(gridSearch.toLowerCase()));
+  }, [gridSearch, paths]);
+
+  const resolvePath = (obj, path) => {
+    if (!path || path === '$') return obj;
+    try {
+      let current = obj;
+      const parts = path.substring(1).match(/(\.[a-zA-Z_$][a-zA-Z0-9_$]*|\[\d+\]|\["(?:[^"\\]|\\.)*"\]|\['(?:[^'\\]|\\.)*'\])/g);
+      if (!parts) return current;
+      for (const p of parts) {
+        if (p.startsWith('.')) {
+          current = current[p.substring(1)];
+        } else if (p.startsWith('["') || p.startsWith("['")) {
+          const inner = p.substring(2, p.length - 2).replace(/\\"/g, '"').replace(/\\'/g, "'");
+          current = current[inner];
+        } else if (p.startsWith('[')) {
+          current = current[parseInt(p.substring(1, p.length - 1), 10)];
+        }
+        if (current === undefined || current === null) return current;
+      }
+      return current;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const resolvedData = React.useMemo(() => {
+    if (!selectedPath) return { array: [], isWrappedObject: false };
+    const resolved = resolvePath(data, selectedPath);
+    if (resolved === undefined || resolved === null) return { array: [], isWrappedObject: false };
+    if (Array.isArray(resolved)) return { array: resolved, isWrappedObject: false };
+    return { array: [resolved], isWrappedObject: true };
+  }, [data, selectedPath]);
+
+  const activeArray = resolvedData.array;
+  const isWrappedObject = resolvedData.isWrappedObject;
 
   // Column calculations
   const { isPrimitiveArray, originalHeaders } = React.useMemo(() => {
@@ -602,7 +679,7 @@ function GridTab({ data }) {
     document.body.removeChild(link);
   };
 
-  const renderCellContent = (val) => {
+  const renderCellContent = (val, pathStr) => {
     if (val === undefined) return <span className="text-muted" style={{ opacity: 0.35 }}>-</span>;
     if (val === null) return <span className="grid-badge grid-badge-null">null</span>;
     
@@ -610,6 +687,19 @@ function GridTab({ data }) {
     if (type === 'string') return <span className="type-string">"{val}"</span>;
     if (type === 'number') return <span className="type-number">{val}</span>;
     if (type === 'boolean') return <span className="type-boolean">{val ? 'true' : 'false'}</span>;
+
+    const renderClickableNode = (displayVal, clickPath) => {
+      return (
+        <span 
+          className="grid-badge grid-clickable" 
+          style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--accent-cyan)' }}
+          onClick={() => handleSelectPath(clickPath)}
+          title={`Go to ${clickPath}`}
+        >
+          {displayVal}
+        </span>
+      );
+    };
 
     if (Array.isArray(val)) {
       if (val.length === 0) return <span className="text-muted">[]</span>;
@@ -644,13 +734,17 @@ function GridTab({ data }) {
                 <tr key={r}>
                   {subHeaders.map(sh => {
                     const innerVal = subRow ? subRow[sh] : undefined;
-                    let displayVal = '-';
+                    let displayNode = <span>-</span>;
                     if (innerVal !== undefined) {
-                      if (innerVal === null) displayVal = 'null';
-                      else if (typeof innerVal === 'object') displayVal = '{...}';
-                      else displayVal = String(innerVal);
+                      const isSimple = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(sh);
+                      const childPath = `${pathStr}[${r}]${isSimple ? `.${sh}` : `["${sh.replace(/"/g, '\\"')}"]`}`;
+                      
+                      if (innerVal === null) displayNode = <span>null</span>;
+                      else if (Array.isArray(innerVal)) displayNode = renderClickableNode(`[${innerVal.length}]`, childPath);
+                      else if (typeof innerVal === 'object') displayNode = renderClickableNode('{...}', childPath);
+                      else displayNode = <span>{String(innerVal)}</span>;
                     }
-                    return <td key={sh}>{displayVal}</td>;
+                    return <td key={sh}>{displayNode}</td>;
                   })}
                 </tr>
               ))}
@@ -674,16 +768,19 @@ function GridTab({ data }) {
         <div className="cell-nested-object">
           {keys.map(k => {
             const innerVal = val[k];
-            let displayVal = '';
-            if (innerVal === null) displayVal = 'null';
-            else if (Array.isArray(innerVal)) displayVal = `[${innerVal.length}]`;
-            else if (typeof innerVal === 'object') displayVal = '{...}';
-            else displayVal = String(innerVal);
+            const isSimple = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k);
+            const childPath = `${pathStr}${isSimple ? `.${k}` : `["${k.replace(/"/g, '\\"')}"]`}`;
+            
+            let displayNode;
+            if (innerVal === null) displayNode = <span>null</span>;
+            else if (Array.isArray(innerVal)) displayNode = renderClickableNode(`[${innerVal.length}]`, childPath);
+            else if (typeof innerVal === 'object') displayNode = renderClickableNode('{...}', childPath);
+            else displayNode = <span>{String(innerVal)}</span>;
 
             return (
               <div key={k} className="nested-prop-row">
                 <span className="nested-prop-key">{k}</span>
-                <span className="nested-prop-val">{displayVal}</span>
+                <span className="nested-prop-val">{displayNode}</span>
               </div>
             );
           })}
@@ -703,36 +800,67 @@ function GridTab({ data }) {
 
   return (
     <>
-      <div className="grid-controls card" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-        <div className="grid-selector-wrapper" style={{ flex: '1 1 200px' }}>
-          <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-            Select Array Node:
-          </label>
-          <select 
-            value={selectedPath} 
-            onChange={(e) => { setSelectedPath(e.target.value); setCurrentPage(1); }} 
-            className="form-select select-sm" 
-            style={{ width: '100%', backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: 'var(--radius-sm)' }}
+      <div className="grid-controls card" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end', position: 'relative', zIndex: 20 }}>
+        <div className="grid-history-actions" style={{ display: 'flex', gap: '8px' }}>
+          <button 
+            className="btn btn-secondary" 
+            style={{ padding: '6px 10px' }}
+            disabled={historyIndex <= 0}
+            onClick={goBack}
+            title="Go Back"
           >
-            {paths.map(p => (
-              <option key={p} value={p}>
-                {p} ({detectedArrays[p].length} items)
-              </option>
-            ))}
-          </select>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <button 
+            className="btn btn-secondary" 
+            style={{ padding: '6px 10px' }}
+            disabled={historyIndex >= pathHistory.length - 1}
+            onClick={goForward}
+            title="Go Forward"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
         </div>
-        <div className="grid-search-wrapper" style={{ flex: '2 1 300px' }}>
+        <div className="grid-search-wrapper" style={{ flex: '1 1 300px' }}>
           <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-            Filter Grid:
+            Filter Grid (Current Path: <span style={{ fontFamily: 'var(--font-mono)' }}>{selectedPath}</span>)
           </label>
-          <div className="search-box" style={{ width: '100%', maxWidth: 'none', background: 'var(--bg-input)', padding: '0 10px', display: 'flex', alignItems: 'center' }}>
+          <div className="search-box" style={{ width: '100%', maxWidth: 'none', background: 'var(--bg-input)', padding: '0 10px', display: 'flex', alignItems: 'center', position: 'relative' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input 
               type="text" 
-              placeholder="Search across all columns..." 
+              placeholder="Search data or enter path..." 
               value={gridSearch}
+              onFocus={() => setShowDropdown(true)}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setFocusedSuggestionIndex(prev => Math.min(prev + 1, filteredPaths.length - 1));
+                  setShowDropdown(true);
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setFocusedSuggestionIndex(prev => Math.max(prev - 1, -1));
+                } else if ((e.key === 'Enter' || e.key === 'Tab') && showDropdown && focusedSuggestionIndex >= 0) {
+                  e.preventDefault();
+                  const selected = filteredPaths[focusedSuggestionIndex];
+                  handleSelectPath(selected);
+                  setGridSearch(selected);
+                  setShowDropdown(false);
+                } else if (e.key === 'Escape') {
+                  setShowDropdown(false);
+                }
+              }}
               onChange={(e) => { 
                 const val = e.target.value;
+                setGridSearch(val);
+                setShowDropdown(true);
+                setFocusedSuggestionIndex(-1);
+                setCurrentPage(1);
 
                 if (val.trim().startsWith('$')) {
                   const trimmedPath = val.trim();
@@ -740,15 +868,44 @@ function GridTab({ data }) {
                   const matchedPath = sortedPaths.find(p => trimmedPath === p || trimmedPath.startsWith(p + '[') || trimmedPath.startsWith(p + '.'));
                   
                   if (matchedPath) {
-                    setSelectedPath(matchedPath);
+                    handleSelectPath(matchedPath);
                   }
                 }
-
-                setGridSearch(val);
-                setCurrentPage(1);
               }}
               style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', color: 'var(--text-primary)', padding: '6px 8px', fontSize: '13px' }}
             />
+            {showDropdown && filteredPaths.length > 0 && (
+              <ul className="custom-dropdown" style={{ 
+                position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, 
+                maxHeight: '200px', overflowY: 'auto', 
+                background: 'var(--bg-app)', border: '1px solid var(--border-color)', 
+                borderRadius: '4px', zIndex: 9999, margin: 0, padding: '4px 0', 
+                listStyle: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+              }}>
+                {filteredPaths.map((p, idx) => {
+                  const isFocused = idx === focusedSuggestionIndex;
+                  return (
+                    <li 
+                      key={p} 
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Prevent input onBlur from firing first
+                        handleSelectPath(p);
+                        setGridSearch(p);
+                        setShowDropdown(false);
+                      }}
+                      onMouseEnter={() => setFocusedSuggestionIndex(idx)}
+                      style={{ 
+                        padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontFamily: 'var(--font-mono)',
+                        background: isFocused ? 'var(--bg-hover, rgba(255,255,255,0.1))' : 'transparent',
+                        color: isFocused ? 'var(--text-primary)' : 'var(--text-muted)'
+                      }}
+                    >
+                      {p}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
         <div className="grid-actions" style={{ display: 'flex', alignItems: 'flex-end' }}>
@@ -793,18 +950,23 @@ function GridTab({ data }) {
                   <tr>
                     <td style={{ fontWeight: '600', color: 'var(--text-primary)', position: 'sticky', left: 0, backgroundColor: 'var(--bg-card)' }}>Value</td>
                     {paginatedArray.map(meta => (
-                      <td key={meta._originalIndex}>{renderCellContent(meta.data)}</td>
+                      <td key={meta._originalIndex}>{renderCellContent(meta.data, isWrappedObject ? selectedPath : `${selectedPath}[${meta._originalIndex}]`)}</td>
                     ))}
                   </tr>
                 ) : (
                   headers.slice(1).map(colKey => (
                     <tr key={colKey}>
                       <td style={{ fontWeight: '600', color: 'var(--text-primary)', position: 'sticky', left: 0, backgroundColor: 'var(--bg-card)' }}>{colKey}</td>
-                      {paginatedArray.map(meta => (
+                      {paginatedArray.map(meta => {
+                         const childPath = isWrappedObject
+                           ? `${selectedPath}${/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(colKey) ? `.${colKey}` : `["${colKey.replace(/"/g, '\\"')}"]`}`
+                           : `${selectedPath}[${meta._originalIndex}]${/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(colKey) ? `.${colKey}` : `["${colKey.replace(/"/g, '\\"')}"]`}`;
+                         return (
                         <td key={meta._originalIndex}>
-                          {renderCellContent(meta.data ? meta.data[colKey] : undefined)}
+                          {renderCellContent(meta.data ? meta.data[colKey] : undefined, childPath)}
                         </td>
-                      ))}
+                         );
+                      })}
                     </tr>
                   ))
                 )}
@@ -838,13 +1000,18 @@ function GridTab({ data }) {
                         {actualIdx}
                       </td>
                       {isPrimitiveArray ? (
-                        <td>{renderCellContent(rowItem)}</td>
+                        <td>{renderCellContent(rowItem, isWrappedObject ? selectedPath : `${selectedPath}[${actualIdx}]`)}</td>
                       ) : (
-                        headers.slice(1).map(colKey => (
+                        headers.slice(1).map(colKey => {
+                          const childPath = isWrappedObject
+                            ? `${selectedPath}${/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(colKey) ? `.${colKey}` : `["${colKey.replace(/"/g, '\\"')}"]`}`
+                            : `${selectedPath}[${actualIdx}]${/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(colKey) ? `.${colKey}` : `["${colKey.replace(/"/g, '\\"')}"]`}`;
+                          return (
                           <td key={colKey}>
-                            {renderCellContent(rowItem ? rowItem[colKey] : undefined)}
+                            {renderCellContent(rowItem ? rowItem[colKey] : undefined, childPath)}
                           </td>
-                        ))
+                          );
+                        })
                       )}
                     </tr>
                   );
