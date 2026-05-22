@@ -377,6 +377,7 @@ function GridTab({ data }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [gridSearch, setGridSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [isTransposed, setIsTransposed] = useState(false);
   const pageSize = 15;
 
   useEffect(() => {
@@ -687,6 +688,14 @@ function GridTab({ data }) {
           </div>
         </div>
         <div className="grid-actions" style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <button onClick={() => setIsTransposed(!isTransposed)} className={`btn btn-xs ${isTransposed ? 'btn-primary' : 'btn-secondary'}`} style={{ height: '32px', marginRight: '8px' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}>
+              <polyline points="21 8 21 21 3 21 3 8"></polyline>
+              <rect x="1" y="3" width="22" height="5"></rect>
+              <line x1="10" y1="12" x2="14" y2="12"></line>
+            </svg>
+            <span>Transpose</span>
+          </button>
           <button onClick={handleExportCSV} className="btn btn-xs btn-secondary" style={{ height: '32px' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}>
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -702,6 +711,41 @@ function GridTab({ data }) {
         <div className="grid-table-container">
           {activeArray.length === 0 ? (
             <span className="text-muted">Empty Array node</span>
+          ) : isTransposed ? (
+            <table className="grid-table transposed-table">
+              <thead>
+                <tr>
+                  <th style={{ minWidth: '150px' }}>Field / Index</th>
+                  {paginatedArray.map(meta => (
+                    <th key={meta._originalIndex} style={{ textAlign: 'center', minWidth: '100px' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 'normal' }}>Index</div>
+                      {meta._originalIndex}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {isPrimitiveArray ? (
+                  <tr>
+                    <td style={{ fontWeight: '600', color: 'var(--text-primary)', position: 'sticky', left: 0, backgroundColor: 'var(--bg-card)' }}>Value</td>
+                    {paginatedArray.map(meta => (
+                      <td key={meta._originalIndex}>{renderCellContent(meta.data)}</td>
+                    ))}
+                  </tr>
+                ) : (
+                  headers.slice(1).map(colKey => (
+                    <tr key={colKey}>
+                      <td style={{ fontWeight: '600', color: 'var(--text-primary)', position: 'sticky', left: 0, backgroundColor: 'var(--bg-card)' }}>{colKey}</td>
+                      {paginatedArray.map(meta => (
+                        <td key={meta._originalIndex}>
+                          {renderCellContent(meta.data ? meta.data[colKey] : undefined)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           ) : (
             <table className="grid-table">
               <thead>
