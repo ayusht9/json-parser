@@ -375,6 +375,8 @@ function GridTab({ data }) {
   const [detectedArrays, setDetectedArrays] = useState({});
   const [selectedPath, setSelectedPath] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [gridSearch, setGridSearch] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const pageSize = 15;
 
   useEffect(() => {
@@ -449,18 +451,59 @@ function GridTab({ data }) {
     }
   }
 
-  const totalRecords = activeArray.length;
-  const totalPages = Math.ceil(totalRecords / pageSize);
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    setSortConfig({ key, direction });
+  };
+
+  const activeArrayWithMeta = activeArray.map((item, idx) => ({ _originalIndex: idx, data: item }));
+  let processedArray = [...activeArrayWithMeta];
+
+  if (gridSearch) {
+    const lowerSearch = gridSearch.toLowerCase();
+    processedArray = processedArray.filter(item => 
+      JSON.stringify(item.data).toLowerCase().includes(lowerSearch)
+    );
+  }
+
+  if (sortConfig.key) {
+    processedArray.sort((aMeta, bMeta) => {
+      if (sortConfig.key === 'Index') {
+        return sortConfig.direction === 'asc' ? aMeta._originalIndex - bMeta._originalIndex : bMeta._originalIndex - aMeta._originalIndex;
+      }
+      let aVal = isPrimitiveArray ? aMeta.data : (aMeta.data ? aMeta.data[sortConfig.key] : undefined);
+      let bVal = isPrimitiveArray ? bMeta.data : (bMeta.data ? bMeta.data[sortConfig.key] : undefined);
+      if (aVal === bVal) return 0;
+      if (aVal === undefined || aVal === null) return 1;
+      if (bVal === undefined || bVal === null) return -1;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return sortConfig.direction === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+    });
+  }
+
+  const totalRecords = processedArray.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalRecords);
-  const paginatedArray = activeArray.slice(startIndex, endIndex);
+  const paginatedArray = processedArray.slice(startIndex, endIndex);
+
+  // Auto-correct out-of-bounds pages when filtering
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(Math.max(1, totalPages));
+    }
+  }, [totalPages, currentPage]);
 
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += headers.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\r\n";
 
-    activeArray.forEach((rowItem, index) => {
-      const rowCells = [String(index)];
+    processedArray.forEach((meta) => {
+      const rowItem = meta.data;
+      const rowCells = [String(meta._originalIndex)];
       if (isPrimitiveArray) {
         rowCells.push(rowItem === null ? 'null' : String(rowItem));
       } else {
@@ -579,8 +622,8 @@ function GridTab({ data }) {
 
   return (
     <>
-      <div className="grid-controls card">
-        <div className="grid-selector-wrapper">
+      <div className="grid-controls card" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+        <div className="grid-selector-wrapper" style={{ flex: '1 1 200px' }}>
           <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
             Select Array Node:
           </label>
@@ -588,7 +631,7 @@ function GridTab({ data }) {
             value={selectedPath} 
             onChange={(e) => { setSelectedPath(e.target.value); setCurrentPage(1); }} 
             className="form-select select-sm" 
-            style={{ maxWidth: '320px', backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: 'var(--radius-sm)' }}
+            style={{ width: '100%', backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: 'var(--radius-sm)' }}
           >
             {paths.map(p => (
               <option key={p} value={p}>
@@ -597,8 +640,23 @@ function GridTab({ data }) {
             ))}
           </select>
         </div>
-        <div className="grid-actions" style={{ marginLeft: 'auto' }}>
-          <button onClick={handleExportCSV} className="btn btn-xs btn-secondary">
+        <div className="grid-search-wrapper" style={{ flex: '2 1 300px' }}>
+          <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+            Filter Grid:
+          </label>
+          <div className="search-box" style={{ width: '100%', maxWidth: 'none', background: 'var(--bg-input)', padding: '0 10px', display: 'flex', alignItems: 'center' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input 
+              type="text" 
+              placeholder="Search across all columns..." 
+              value={gridSearch}
+              onChange={(e) => { setGridSearch(e.target.value); setCurrentPage(1); }}
+              style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', color: 'var(--text-primary)', padding: '6px 8px', fontSize: '13px' }}
+            />
+          </div>
+        </div>
+        <div className="grid-actions" style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <button onClick={handleExportCSV} className="btn btn-xs btn-secondary" style={{ height: '32px' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}>
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
@@ -617,12 +675,24 @@ function GridTab({ data }) {
             <table className="grid-table">
               <thead>
                 <tr>
-                  {headers.map(h => <th key={h}>{h}</th>)}
+                  {headers.map(h => (
+                    <th key={h} onClick={() => handleSort(h)} style={{ cursor: 'pointer', userSelect: 'none' }} title={`Sort by ${h}`}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {h}
+                        {sortConfig.key === h && (
+                          <span style={{ fontSize: '10px', color: 'var(--accent-cyan)' }}>
+                            {sortConfig.direction === 'asc' ? '▲' : '▼'}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {paginatedArray.map((rowItem, i) => {
-                  const actualIdx = startIndex + i;
+                {paginatedArray.map((meta, i) => {
+                  const actualIdx = meta._originalIndex;
+                  const rowItem = meta.data;
                   return (
                     <tr key={actualIdx}>
                       <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', textAlign: 'center' }}>
@@ -680,6 +750,21 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('swagger');
   const [isWrapEnabled, setIsWrapEnabled] = useState(true);
   const [customSchema, setCustomSchema] = useState([]);
+  
+  // File History State
+  const [fileHistory, setFileHistory] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('aerojson_history')) || [];
+    } catch {
+      return [];
+    }
+  });
+  const [showHistory, setShowHistory] = useState(false);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem('aerojson_history', JSON.stringify(fileHistory));
+  }, [fileHistory]);
   
   // Pane Resizing State
   const [editorWidth, setEditorWidth] = useState(500);
@@ -742,14 +827,37 @@ export default function App() {
     loadSample('users');
   }, []);
 
+  const addToHistory = (name, content) => {
+    setFileHistory(prev => {
+      const newEntry = { name, content, timestamp: new Date().toLocaleTimeString() };
+      return [newEntry, ...prev.filter(i => i.name !== name || i.content !== content)].slice(0, 10);
+    });
+  };
+
   const loadSample = (key) => {
     const data = SAMPLES[key];
     if (data) {
       const formatted = JSON.stringify(data, null, 2);
       setInputText(formatted);
       tryParse(formatted);
+      addToHistory(`Sample: ${key}`, formatted);
       addToast(`Loaded sample: ${key}`, 'success');
     }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const content = evt.target.result;
+      setInputText(content);
+      tryParse(content);
+      addToHistory(file.name, content);
+      addToast(`Loaded file: ${file.name}`, 'success');
+    };
+    reader.readAsText(file);
+    e.target.value = null; // reset
   };
 
   // Debounced Parsing
@@ -902,9 +1010,14 @@ export default function App() {
         </div>
 
         <div className="header-actions">
+          <input type="file" ref={fileInputRef} hidden accept=".json" onChange={handleFileUpload} />
+          <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span>Load File</span>
+          </button>
           <div className="dropdown-wrapper">
-            <button className="btn btn-secondary dropdown-trigger" onClick={() => setShowSamples(!showSamples)}>
-              <span>Load Sample JSON</span>
+            <button className="btn btn-secondary dropdown-trigger" onClick={() => { setShowSamples(!showSamples); setShowHistory(false); }}>
+              <span>Samples</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
             {showSamples && (
@@ -914,6 +1027,32 @@ export default function App() {
                 <button onClick={() => { loadSample('weather'); setShowSamples(false); }}>Weather Forecast telemetry</button>
                 <button onClick={() => { loadSample('openapi'); setShowSamples(false); }}>OpenAPI Specs draft</button>
                 <button onClick={() => { loadSample('heavy'); setShowSamples(false); }}>Deeply Nested Heavy Dataset</button>
+              </div>
+            )}
+          </div>
+
+          <div className="dropdown-wrapper">
+            <button className="btn btn-secondary dropdown-trigger" onClick={() => { setShowHistory(!showHistory); setShowSamples(false); }}>
+              <span>History</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            {showHistory && (
+              <div className="dropdown-menu show" style={{ top: '100%', right: 0, minWidth: '250px' }}>
+                {fileHistory.length === 0 ? (
+                  <button disabled className="text-muted" style={{ textAlign: 'center' }}>No history yet</button>
+                ) : (
+                  fileHistory.map((item, idx) => (
+                    <button key={idx} onClick={() => {
+                      setInputText(item.content);
+                      tryParse(item.content);
+                      setShowHistory(false);
+                      addToast(`Restored: ${item.name}`, 'success');
+                    }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', display: 'block' }}>{item.name}</span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{item.timestamp}</span>
+                    </button>
+                  ))
+                )}
               </div>
             )}
           </div>
