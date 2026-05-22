@@ -889,6 +889,18 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('swagger');
   const [isWrapEnabled, setIsWrapEnabled] = useState(true);
   const [customSchema, setCustomSchema] = useState([]);
+
+  useEffect(() => {
+    const tabTitles = {
+      swagger: 'Swagger Spec',
+      tree: 'Interactive Tree',
+      grid: 'Data Grid',
+      tools: 'JSON Tools',
+      sandbox: 'API Sandbox',
+      code: 'Code Snippets'
+    };
+    document.title = `AeroJSON - ${tabTitles[activeTab] || 'Parser'}`;
+  }, [activeTab]);
   
   // File History State
   const [fileHistory, setFileHistory] = useState(() => {
