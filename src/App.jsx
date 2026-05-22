@@ -439,7 +439,7 @@ function GridTab({ data }) {
   const activeArray = detectedArrays[selectedPath] || [];
 
   // Column calculations
-  const { isPrimitiveArray, headers } = React.useMemo(() => {
+  const { isPrimitiveArray, originalHeaders } = React.useMemo(() => {
     let isPrim = false;
     let hdrs = [];
     if (activeArray.length > 0) {
@@ -458,8 +458,26 @@ function GridTab({ data }) {
         hdrs = hdrs.concat(Array.from(keySet));
       }
     }
-    return { isPrimitiveArray: isPrim, headers: hdrs };
+    return { isPrimitiveArray: isPrim, originalHeaders: hdrs };
   }, [activeArray]);
+
+  const headers = React.useMemo(() => {
+    if (isPrimitiveArray) return originalHeaders;
+    if (gridSearch && gridSearch.trim().startsWith('$')) {
+      const trimmedPath = gridSearch.trim();
+      if (trimmedPath.startsWith(selectedPath)) {
+        const remainder = trimmedPath.slice(selectedPath.length);
+        const match = remainder.match(/^(?:\[(\d+)\])?(?:(?:\.)([a-zA-Z_$][a-zA-Z0-9_$]*)|\["([^"]+)"\]|\['([^']+)'\])?$/);
+        if (match) {
+          const targetCol = match[2] || match[3] || match[4];
+          if (targetCol) {
+            return ['Index', targetCol];
+          }
+        }
+      }
+    }
+    return originalHeaders;
+  }, [originalHeaders, isPrimitiveArray, gridSearch, selectedPath]);
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -487,10 +505,14 @@ function GridTab({ data }) {
         }
         if (trimmedPath.startsWith(selectedPath)) {
           const remainder = trimmedPath.slice(selectedPath.length);
-          const match = remainder.match(/^\[(\d+)\]/);
+          const match = remainder.match(/^(?:\[(\d+)\])?(?:(?:\.)([a-zA-Z_$][a-zA-Z0-9_$]*)|\["([^"]+)"\]|\['([^']+)'\])?$/);
           if (match) {
-            const targetIndex = parseInt(match[1], 10);
-            return result.filter(item => item._originalIndex === targetIndex);
+            if (match[1]) {
+              const targetIndex = parseInt(match[1], 10);
+              return result.filter(item => item._originalIndex === targetIndex);
+            } else {
+              return result; // Filtered by column only, so return all rows
+            }
           }
         }
       }
