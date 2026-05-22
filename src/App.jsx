@@ -679,6 +679,7 @@ export default function App() {
   const [syntaxError, setSyntaxError] = useState(null);
   const [activeTab, setActiveTab] = useState('swagger');
   const [isWrapEnabled, setIsWrapEnabled] = useState(true);
+  const [customSchema, setCustomSchema] = useState([]);
   
   // Pane Resizing State
   const [editorWidth, setEditorWidth] = useState(500);
@@ -857,6 +858,14 @@ export default function App() {
     }
     return rows;
   };
+
+  useEffect(() => {
+    if (parsedData) {
+      setCustomSchema(inferSchemaProperties(parsedData));
+    } else {
+      setCustomSchema([]);
+    }
+  }, [parsedData]);
 
   const lines = inputText.split('\n');
 
@@ -1079,7 +1088,7 @@ export default function App() {
                     </div>
                     <div className="endpoint-details">
                       <h3>Request Parameters Schema</h3>
-                      <table className="swagger-table">
+                      <table className="schema-properties-table">
                         <thead>
                           <tr>
                             <th>Parameter</th>
@@ -1090,12 +1099,36 @@ export default function App() {
                         </thead>
                         <tbody>
                           {parsedData ? (
-                            inferSchemaProperties(parsedData).map((prop, i) => (
+                            customSchema.map((prop, i) => (
                               <tr key={i}>
                                 <td><strong><code>{prop.name}</code></strong></td>
                                 <td><span className="badge" style={{ color: 'var(--accent-cyan)' }}>{prop.type}</span></td>
-                                <td><span className="text-danger">Yes</span></td>
-                                <td><span className="text-muted" style={{ fontSize: '12px' }}>{prop.validation || 'None'}</span></td>
+                                <td>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={prop.required !== false} 
+                                    onChange={(e) => {
+                                      const newSchema = [...customSchema];
+                                      newSchema[i].required = e.target.checked;
+                                      setCustomSchema(newSchema);
+                                    }}
+                                    style={{ cursor: 'pointer' }}
+                                  />
+                                </td>
+                                <td>
+                                  <input 
+                                    type="text" 
+                                    className="form-control" 
+                                    value={prop.validation || ''} 
+                                    onChange={(e) => {
+                                      const newSchema = [...customSchema];
+                                      newSchema[i].validation = e.target.value;
+                                      setCustomSchema(newSchema);
+                                    }}
+                                    placeholder="None"
+                                    style={{ width: '100%', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '4px 8px', borderRadius: '4px' }}
+                                  />
+                                </td>
                               </tr>
                             ))
                           ) : (
@@ -1119,8 +1152,8 @@ export default function App() {
                     <pre id="model-detail-pre" className="code-block font-mono" style={{ padding: '16px', margin: 0 }}>
                       {parsedData ? (
                         <code dangerouslySetInnerHTML={{
-                          __html: '{\n' + inferSchemaProperties(parsedData).map((prop, i, arr) => (
-                            `  "${prop.name}": <span class="type-${prop.type}">${prop.type}</span>${i === arr.length - 1 ? '' : ','}${prop.validation ? ` // ${prop.validation}` : ''}`
+                          __html: '{\n' + customSchema.map((prop, i, arr) => (
+                            `  "${prop.name}": <span class="type-${prop.type}">${prop.type}</span>${i === arr.length - 1 ? '' : ','}${prop.validation ? ` // ${prop.validation}` : ''}${prop.required === false ? ' /* optional */' : ''}`
                           )).join('\n') + '\n}'
                         }} />
                       ) : (
