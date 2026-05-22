@@ -381,27 +381,30 @@ function GridTab({ data }) {
 
   useEffect(() => {
     const list = {};
-    const collectArrays = (obj, path) => {
+    const collectArrays = (obj, path, depth = 0) => {
+      if (depth > 10) return; // Prevent stack overflow on deeply nested JSON
       if (Object.keys(list).length >= 35) return;
       if (obj === null || typeof obj !== 'object') return;
       
       if (Array.isArray(obj)) {
         list[path] = obj;
         obj.forEach((item, index) => {
-          if (index < 2) collectArrays(item, `${path}[${index}]`);
+          if (index < 2) collectArrays(item, `${path}[${index}]`, depth + 1);
         });
       } else {
+        let keysChecked = 0;
         for (const key in obj) {
+          if (keysChecked++ > 50) break; // Limit scanning to 50 keys per object to prevent crashing
           const val = obj[key];
           const nextPath = path === 'root' ? key : `${path}.${key}`;
           if (val !== null && typeof val === 'object') {
             if (Array.isArray(val)) {
               list[nextPath] = val;
               val.forEach((item, index) => {
-                if (index < 2) collectArrays(item, `${nextPath}[${index}]`);
+                if (index < 2) collectArrays(item, `${nextPath}[${index}]`, depth + 1);
               });
             } else {
-              collectArrays(val, nextPath);
+              collectArrays(val, nextPath, depth + 1);
             }
           }
         }
@@ -424,71 +427,89 @@ function GridTab({ data }) {
   const paths = Object.keys(detectedArrays);
   const activeArray = detectedArrays[selectedPath] || [];
 
-  if (paths.length === 0) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <span className="text-muted">No Array nodes could be extracted from your JSON structure.</span>
-      </div>
-    );
-  }
-
   // Column calculations
-  let isPrimitiveArray = false;
-  let headers = [];
-  if (activeArray.length > 0) {
-    if (typeof activeArray[0] !== 'object' || activeArray[0] === null) {
-      isPrimitiveArray = true;
-      headers = ['Index', 'Value'];
-    } else {
-      headers = ['Index'];
-      const keySet = new Set();
-      activeArray.forEach(item => {
-        if (item && typeof item === 'object') {
-          Object.keys(item).forEach(k => keySet.add(k));
-        }
-      });
-      headers = headers.concat(Array.from(keySet));
+  const { isPrimitiveArray, headers } = React.useMemo(() => {
+    let isPrim = false;
+    let hdrs = [];
+    if (activeArray.length > 0) {
+      if (typeof activeArray[0] !== 'object' || activeArray[0] === null) {
+        isPrim = true;
+        hdrs = ['Index', 'Value'];
+      } else {
+        hdrs = ['Index'];
+        const keySet = new Set();
+        // Sample up to 50 items to avoid freezing on massive arrays
+        activeArray.slice(0, 50).forEach(item => {
+          if (item && typeof item === 'object') {
+            Object.keys(item).forEach(k => keySet.add(k));
+          }
+        });
+        hdrs = hdrs.concat(Array.from(keySet));
+      }
     }
-  }
+    return { isPrimitiveArray: isPrim, headers: hdrs };
+  }, [activeArray]);
 
   const handleSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
     setSortConfig({ key, direction });
+    setCurrentPage(1);
   };
 
-  const activeArrayWithMeta = activeArray.map((item, idx) => ({ _originalIndex: idx, data: item }));
-  let processedArray = [...activeArrayWithMeta];
+  const processedArray = React.useMemo(() => {
+    if (!gridSearch && !sortConfig.key) return null; // Lazy mode for default view
 
-  if (gridSearch) {
-    const lowerSearch = gridSearch.toLowerCase();
-    processedArray = processedArray.filter(item => 
-      JSON.stringify(item.data).toLowerCase().includes(lowerSearch)
-    );
-  }
+    let result = [];
+    for (let i = 0; i < activeArray.length; i++) {
+      result.push({ _originalIndex: i, data: activeArray[i] });
+    }
 
-  if (sortConfig.key) {
-    processedArray.sort((aMeta, bMeta) => {
-      if (sortConfig.key === 'Index') {
-        return sortConfig.direction === 'asc' ? aMeta._originalIndex - bMeta._originalIndex : bMeta._originalIndex - aMeta._originalIndex;
-      }
-      let aVal = isPrimitiveArray ? aMeta.data : (aMeta.data ? aMeta.data[sortConfig.key] : undefined);
-      let bVal = isPrimitiveArray ? bMeta.data : (bMeta.data ? bMeta.data[sortConfig.key] : undefined);
-      if (aVal === bVal) return 0;
-      if (aVal === undefined || aVal === null) return 1;
-      if (bVal === undefined || bVal === null) return -1;
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      }
-      return sortConfig.direction === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
-    });
-  }
+    if (gridSearch) {
+      const lowerSearch = gridSearch.toLowerCase();
+      result = result.filter(item => {
+        try {
+          return JSON.stringify(item.data).toLowerCase().includes(lowerSearch);
+        } catch {
+          return false;
+        }
+      });
+    }
 
-  const totalRecords = processedArray.length;
+    if (sortConfig.key) {
+      result.sort((aMeta, bMeta) => {
+        if (sortConfig.key === 'Index') {
+          return sortConfig.direction === 'asc' ? aMeta._originalIndex - bMeta._originalIndex : bMeta._originalIndex - aMeta._originalIndex;
+        }
+        let aVal = isPrimitiveArray ? aMeta.data : (aMeta.data ? aMeta.data[sortConfig.key] : undefined);
+        let bVal = isPrimitiveArray ? bMeta.data : (bMeta.data ? bMeta.data[sortConfig.key] : undefined);
+        if (aVal === bVal) return 0;
+        if (aVal === undefined || aVal === null) return 1;
+        if (bVal === undefined || bVal === null) return -1;
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+        return sortConfig.direction === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+      });
+    }
+    return result;
+  }, [activeArray, gridSearch, sortConfig, isPrimitiveArray]);
+
+  const totalRecords = processedArray ? processedArray.length : activeArray.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalRecords);
-  const paginatedArray = processedArray.slice(startIndex, endIndex);
+  
+  const paginatedArray = React.useMemo(() => {
+    if (processedArray) {
+      return processedArray.slice(startIndex, endIndex);
+    } else {
+      return activeArray.slice(startIndex, endIndex).map((item, idx) => ({
+        _originalIndex: startIndex + idx,
+        data: item
+      }));
+    }
+  }, [processedArray, activeArray, startIndex, endIndex]);
 
   // Auto-correct out-of-bounds pages when filtering
   useEffect(() => {
@@ -501,7 +522,9 @@ function GridTab({ data }) {
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += headers.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\r\n";
 
-    processedArray.forEach((meta) => {
+    const fullArrayToExport = processedArray ? processedArray : activeArray.map((item, idx) => ({ _originalIndex: idx, data: item }));
+    
+    fullArrayToExport.forEach((meta) => {
       const rowItem = meta.data;
       const rowCells = [String(meta._originalIndex)];
       if (isPrimitiveArray) {
@@ -619,6 +642,14 @@ function GridTab({ data }) {
     }
     return String(val);
   };
+
+  if (paths.length === 0) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <span className="text-muted">No Array nodes could be extracted from your JSON structure.</span>
+      </div>
+    );
+  }
 
   return (
     <>
