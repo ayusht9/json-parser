@@ -1355,21 +1355,29 @@ export default function App() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
             {showHistory && (
-              <div className="dropdown-menu show" style={{ top: '100%', right: 0, minWidth: '250px' }}>
+              <div className="dropdown-menu show" style={{ top: '100%', right: 0 }}>
                 {fileHistory.length === 0 ? (
                   <button disabled className="text-muted" style={{ textAlign: 'center' }}>No history yet</button>
                 ) : (
-                  fileHistory.map((item, idx) => (
-                    <button key={idx} onClick={() => {
-                      setInputText(item.content);
-                      tryParse(item.content);
-                      setShowHistory(false);
-                      addToast(`Restored: ${item.name}`, 'success');
-                    }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                      <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', display: 'block' }}>{item.name}</span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{item.timestamp}</span>
+                  <>
+                    {fileHistory.map((item, idx) => (
+                      <button key={idx} onClick={() => {
+                        setInputText(item.content);
+                        tryParse(item.content);
+                        setShowHistory(false);
+                        addToast(`Restored: ${item.name}`, 'success');
+                      }}>
+                        {item.name}
+                      </button>
+                    ))}
+                    <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 0' }}></div>
+                    <button 
+                      onClick={() => { setFileHistory([]); setShowHistory(false); addToast('History cleared', 'success'); }}
+                      style={{ color: 'var(--accent-rose)', textAlign: 'center', fontWeight: 'bold' }}
+                    >
+                      Clear History
                     </button>
-                  ))
+                  </>
                 )}
               </div>
             )}
