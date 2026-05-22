@@ -1078,6 +1078,7 @@ export default function App() {
     }
   });
   const [showHistory, setShowHistory] = useState(false);
+  const [fileHandle, setFileHandle] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -1159,6 +1160,7 @@ export default function App() {
       setInputText(formatted);
       tryParse(formatted);
       addToHistory(`Sample: ${key}`, formatted);
+      setFileHandle(null);
       addToast(`Loaded sample: ${key}`, 'success');
     }
   };
@@ -1226,19 +1228,57 @@ export default function App() {
     addToast('Minified JSON payload', 'success');
   };
 
-  const copyInput = () => {
+  const saveJSON = async () => {
     if (!inputText.trim()) {
-      addToast('Nothing to copy', 'error');
+      addToast('Nothing to save', 'error');
       return;
     }
-    navigator.clipboard.writeText(inputText);
-    addToast('Copied raw JSON to clipboard', 'success');
+    
+    try {
+      if (fileHandle) {
+        // Overwrite existing file
+        const writable = await fileHandle.createWritable();
+        await writable.write(inputText);
+        await writable.close();
+        addToast('File saved successfully', 'success');
+      } else if (window.showSaveFilePicker) {
+        // Save as new file using picker if supported
+        const handle = await window.showSaveFilePicker({
+          suggestedName: 'aerojson-export.json',
+          types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(inputText);
+        await writable.close();
+        setFileHandle(handle);
+        addToast('File saved successfully', 'success');
+      } else {
+        // Fallback to old download
+        const blob = new Blob([inputText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'aerojson-export.json';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 100);
+        addToast('Downloaded JSON file', 'success');
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        addToast('Failed to save file', 'error');
+      }
+    }
   };
 
   const clearInput = () => {
     setInputText('');
     setParsedData(null);
     setSyntaxError(null);
+    setFileHandle(null);
     addToast('Editor cleared', 'info');
   };
 
@@ -1328,8 +1368,30 @@ export default function App() {
         </div>
 
         <div className="header-actions">
-          <input type="file" ref={fileInputRef} hidden accept=".json" onChange={handleFileUpload} />
-          <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>
+          <input type="file" ref={fileInputRef} hidden accept=".json" onChange={(e) => {
+            handleFileUpload(e);
+            setFileHandle(null);
+          }} />
+          <button className="btn btn-secondary" onClick={async () => {
+            if (window.showOpenFilePicker) {
+              try {
+                const [handle] = await window.showOpenFilePicker({
+                  types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }]
+                });
+                const file = await handle.getFile();
+                const content = await file.text();
+                setInputText(content);
+                tryParse(content);
+                addToHistory(file.name, content);
+                setFileHandle(handle);
+                addToast(`Loaded file: ${file.name}`, 'success');
+              } catch (err) {
+                if (err.name !== 'AbortError') addToast('Failed to open file', 'error');
+              }
+            } else {
+              fileInputRef.current.click();
+            }
+          }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
             <span>Load File</span>
           </button>
@@ -1365,6 +1427,7 @@ export default function App() {
                         setInputText(item.content);
                         tryParse(item.content);
                         setShowHistory(false);
+                        setFileHandle(null);
                         addToast(`Restored: ${item.name}`, 'success');
                       }}>
                         {item.name}
@@ -1424,7 +1487,7 @@ export default function App() {
                 <button className={`btn btn-sm ${isWrapEnabled ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setIsWrapEnabled(!isWrapEnabled)}>Wrap</button>
                 <button className="btn btn-sm btn-primary" onClick={formatJSON}>Format</button>
                 <button className="btn btn-sm btn-secondary" onClick={minifyJSON}>Minify</button>
-                <button className="btn btn-sm btn-secondary" onClick={copyInput}>Copy</button>
+                <button className="btn btn-sm btn-secondary" onClick={saveJSON}>Save</button>
                 <button className="btn btn-sm btn-danger" onClick={clearInput}>Clear</button>
                 <button 
                   className="btn btn-sm btn-secondary icon-btn-only" 
