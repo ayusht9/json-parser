@@ -397,7 +397,14 @@ function GridTab({ data }) {
         for (const key in obj) {
           if (keysChecked++ > 50) break; // Limit scanning to 50 keys per object to prevent crashing
           const val = obj[key];
-          const nextPath = path === 'root' ? key : `${path}.${key}`;
+          const isSimple = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key);
+          let nextPath;
+          if (path === '$') {
+             nextPath = isSimple ? `$.${key}` : `$["${key.replace(/"/g, '\\"')}"]`;
+          } else {
+             nextPath = isSimple ? `${path}.${key}` : `${path}["${key.replace(/"/g, '\\"')}"]`;
+          }
+          
           if (val !== null && typeof val === 'object') {
             if (Array.isArray(val)) {
               list[nextPath] = val;
@@ -413,7 +420,10 @@ function GridTab({ data }) {
     };
 
     if (data) {
-      collectArrays(data, 'root');
+      if (!Array.isArray(data) && typeof data === 'object' && data !== null) {
+        list['$'] = [data];
+      }
+      collectArrays(data, '$');
     }
     setDetectedArrays(list);
     const paths = Object.keys(list);
@@ -468,6 +478,23 @@ function GridTab({ data }) {
 
     if (gridSearch) {
       const lowerSearch = gridSearch.toLowerCase();
+      const isPathSearch = gridSearch.trim().startsWith('$');
+      
+      if (isPathSearch) {
+        const trimmedPath = gridSearch.trim();
+        if (trimmedPath === selectedPath) {
+          return result; // Exact array match, show all items
+        }
+        if (trimmedPath.startsWith(selectedPath)) {
+          const remainder = trimmedPath.slice(selectedPath.length);
+          const match = remainder.match(/^\[(\d+)\]/);
+          if (match) {
+            const targetIndex = parseInt(match[1], 10);
+            return result.filter(item => item._originalIndex === targetIndex);
+          }
+        }
+      }
+
       result = result.filter(item => {
         try {
           return JSON.stringify(item.data).toLowerCase().includes(lowerSearch);
@@ -494,7 +521,7 @@ function GridTab({ data }) {
       });
     }
     return result;
-  }, [activeArray, gridSearch, sortConfig, isPrimitiveArray]);
+  }, [activeArray, gridSearch, sortConfig, isPrimitiveArray, selectedPath]);
 
   const totalRecords = processedArray ? processedArray.length : activeArray.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
@@ -682,7 +709,22 @@ function GridTab({ data }) {
               type="text" 
               placeholder="Search across all columns..." 
               value={gridSearch}
-              onChange={(e) => { setGridSearch(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => { 
+                const val = e.target.value;
+
+                if (val.trim().startsWith('$')) {
+                  const trimmedPath = val.trim();
+                  const sortedPaths = Object.keys(detectedArrays).sort((a, b) => b.length - a.length);
+                  const matchedPath = sortedPaths.find(p => trimmedPath === p || trimmedPath.startsWith(p + '[') || trimmedPath.startsWith(p + '.'));
+                  
+                  if (matchedPath) {
+                    setSelectedPath(matchedPath);
+                  }
+                }
+
+                setGridSearch(val);
+                setCurrentPage(1);
+              }}
               style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', color: 'var(--text-primary)', padding: '6px 8px', fontSize: '13px' }}
             />
           </div>
