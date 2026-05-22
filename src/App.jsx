@@ -337,11 +337,12 @@ function TreeNode({ nodeKey, value, isLast = true, displayKey = null, path = "$"
               </div>
             )}
           </div>
-          
-          <div className="tree-node-row closing-bracket-row">
-            <span style={{ width: '14px', display: 'inline-block' }}></span>
-            <span className="tree-bracket">{isArray ? ']' : '}'}</span>
-          </div>
+        </div>
+      )}
+      {isObject && expanded && (
+        <div className="tree-node-row closing-bracket-row">
+          <span style={{ width: '14px', display: 'inline-block' }}></span>
+          <span className="tree-bracket">{isArray ? ']' : '}'}</span>
         </div>
       )}
     </div>
@@ -677,6 +678,7 @@ export default function App() {
   const [parsedData, setParsedData] = useState(null);
   const [syntaxError, setSyntaxError] = useState(null);
   const [activeTab, setActiveTab] = useState('swagger');
+  const [isWrapEnabled, setIsWrapEnabled] = useState(true);
   
   // Pane Resizing State
   const [editorWidth, setEditorWidth] = useState(500);
@@ -945,6 +947,7 @@ export default function App() {
             <div className="pane-header">
               <h2>JSON INPUT EDITOR</h2>
               <div className="editor-actions">
+                <button className={`btn btn-sm ${isWrapEnabled ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setIsWrapEnabled(!isWrapEnabled)}>Wrap</button>
                 <button className="btn btn-sm btn-primary" onClick={formatJSON}>Format</button>
                 <button className="btn btn-sm btn-secondary" onClick={minifyJSON}>Minify</button>
                 <button className="btn btn-sm btn-secondary" onClick={copyInput}>Copy</button>
@@ -975,6 +978,7 @@ export default function App() {
                 onScroll={handleEditorScroll}
                 placeholder='Paste or write your JSON here...'
                 spellCheck="false"
+                style={{ whiteSpace: isWrapEnabled ? 'pre-wrap' : 'pre', overflowX: isWrapEnabled ? 'hidden' : 'auto' }}
               />
             </div>
 
@@ -1065,13 +1069,13 @@ export default function App() {
             {/* Tab: Swagger Spec */}
             {activeTab === 'swagger' && (
               <div className="tab-panel active">
-                <div className="swagger-spec-layout">
-                  <div className="swagger-endpoint card collapsed">
-                    <div className="endpoint-bar" onClick={(e) => e.currentTarget.parentElement.classList.toggle('collapsed')}>
-                      <span className="method-badge method-post">POST</span>
+                <div className="swagger-layout">
+                  <div className="endpoint-block endpoint-post collapsed">
+                    <div className="endpoint-summary" onClick={(e) => e.currentTarget.parentElement.classList.toggle('collapsed')}>
+                      <span className="method-badge">POST</span>
                       <span className="endpoint-path">/v1/mock/resource</span>
-                      <span className="endpoint-desc">Verify, mock validate, and process inbound payloads</span>
-                      <span className="chevron-toggle">▼</span>
+                      <span className="endpoint-description">Verify, mock validate, and process inbound payloads</span>
+                      <span className="chevron">▼</span>
                     </div>
                     <div className="endpoint-details">
                       <h3>Request Parameters Schema</h3>
