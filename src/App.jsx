@@ -384,8 +384,32 @@ function GridTab({ data }) {
   const [focusedSuggestionIndex, setFocusedSuggestionIndex] = useState(-1);
   const pageSize = 15;
 
+  const viewportRef = useRef(null);
+  const historyState = useRef({}); 
+  const isNavigating = useRef(false);
+
+  const saveCurrentState = () => {
+    if (viewportRef.current) {
+      historyState.current[historyIndex] = {
+        page: currentPage,
+        scrollTop: viewportRef.current.scrollTop
+      };
+    }
+  };
+
+  const restoreStateForIndex = (index) => {
+    const saved = historyState.current[index];
+    if (saved) {
+      setCurrentPage(saved.page || 1);
+    } else {
+      setCurrentPage(1);
+    }
+    isNavigating.current = true;
+  };
+
   const handleSelectPath = (newPath, isHistoryAction = false) => {
     if (newPath === selectedPath) return;
+    saveCurrentState();
     if (!isHistoryAction) {
       const newHistory = pathHistory.slice(0, historyIndex + 1);
       newHistory.push(newPath);
@@ -394,24 +418,60 @@ function GridTab({ data }) {
     }
     setSelectedPath(newPath);
     setCurrentPage(1);
+    isNavigating.current = true;
   };
 
   const goBack = () => {
     if (historyIndex > 0) {
-      const prevPath = pathHistory[historyIndex - 1];
-      setHistoryIndex(historyIndex - 1);
-      setSelectedPath(prevPath);
-      setCurrentPage(1);
+      saveCurrentState();
+      const prevIndex = historyIndex - 1;
+      setHistoryIndex(prevIndex);
+      setSelectedPath(pathHistory[prevIndex]);
+      restoreStateForIndex(prevIndex);
     }
   };
 
   const goForward = () => {
     if (historyIndex < pathHistory.length - 1) {
-      const nextPath = pathHistory[historyIndex + 1];
-      setHistoryIndex(historyIndex + 1);
-      setSelectedPath(nextPath);
-      setCurrentPage(1);
+      saveCurrentState();
+      const nextIndex = historyIndex + 1;
+      setHistoryIndex(nextIndex);
+      setSelectedPath(pathHistory[nextIndex]);
+      restoreStateForIndex(nextIndex);
     }
+  };
+
+  useEffect(() => {
+    if (isNavigating.current) {
+      isNavigating.current = false;
+      if (viewportRef.current) {
+        const saved = historyState.current[historyIndex];
+        setTimeout(() => {
+          if (viewportRef.current) {
+            viewportRef.current.scrollTop = saved ? (saved.scrollTop || 0) : 0;
+          }
+        }, 10);
+      }
+    }
+  }, [selectedPath, currentPage, historyIndex]);
+
+  const getBreadcrumbs = (path) => {
+    if (!path) return [];
+    const parts = [{ label: '$ (root)', fullPath: '$' }];
+    if (path === '$') return parts;
+    
+    let currentPath = '$';
+    const matches = path.substring(1).match(/(\.[a-zA-Z_$][a-zA-Z0-9_$]*|\[\d+\]|\["(?:[^"\\]|\\.)*"\]|\['(?:[^'\\]|\\.)*'\])/g);
+    if (matches) {
+      matches.forEach(m => {
+        currentPath += m;
+        let label = m;
+        if (m.startsWith('.')) label = m.substring(1);
+        else if (m.startsWith('[')) label = m.replace(/^\[['"]?|['"]?\]$/g, '');
+        parts.push({ label, fullPath: currentPath });
+      });
+    }
+    return parts;
   };
 
   useEffect(() => {
@@ -826,9 +886,29 @@ function GridTab({ data }) {
           </button>
         </div>
         <div className="grid-search-wrapper" style={{ flex: '1 1 300px' }}>
-          <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-            Filter Grid (Current Path: <span style={{ fontFamily: 'var(--font-mono)' }}>{selectedPath}</span>)
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px', marginBottom: '8px', fontSize: '13px', fontFamily: 'var(--font-mono)' }}>
+            <span style={{ fontWeight: '600', color: 'var(--text-muted)', marginRight: '4px', fontFamily: 'var(--font-sans)' }}>Path:</span>
+            {getBreadcrumbs(selectedPath).map((bc, idx, arr) => (
+              <React.Fragment key={bc.fullPath}>
+                <span 
+                  onClick={() => detectedArrays[bc.fullPath] ? handleSelectPath(bc.fullPath) : null}
+                  style={{ 
+                    cursor: detectedArrays[bc.fullPath] ? 'pointer' : 'default', 
+                    color: detectedArrays[bc.fullPath] ? 'var(--text-primary)' : 'var(--text-muted)',
+                    textDecoration: detectedArrays[bc.fullPath] ? 'underline' : 'none',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background: detectedArrays[bc.fullPath] ? 'var(--accent-purple-glow)' : 'transparent',
+                    border: detectedArrays[bc.fullPath] ? '1px solid rgba(168, 85, 247, 0.2)' : '1px solid transparent'
+                  }}
+                  title={detectedArrays[bc.fullPath] ? "Navigate to array" : "Not a valid array node"}
+                >
+                  {bc.label}
+                </span>
+                {idx < arr.length - 1 && <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>▶</span>}
+              </React.Fragment>
+            ))}
+          </div>
           <div className="search-box" style={{ width: '100%', maxWidth: 'none', background: 'var(--bg-input)', padding: '0 10px', display: 'flex', alignItems: 'center', position: 'relative' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input 
@@ -928,7 +1008,7 @@ function GridTab({ data }) {
         </div>
       </div>
 
-      <div className="grid-viewport card" style={{ overflow: 'auto' }}>
+      <div className="grid-viewport card" style={{ overflow: 'auto' }} ref={viewportRef}>
         <div className="grid-table-container">
           {activeArray.length === 0 ? (
             <span className="text-muted">Empty Array node</span>
