@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import CodeEditor from '@uiw/react-textarea-code-editor';
 
 // --- Sample Data Profiles ---
@@ -176,18 +176,18 @@ const SAMPLES = {
 // --- Custom Toast Component ---
 function useToasts() {
   const [toasts, setToasts] = useState([]);
-  const addToast = (msg, type = 'info') => {
+  const addToast = useCallback((msg, type = 'info') => {
     const id = Math.random().toString(36).substr(2, 9);
     setToasts(prev => [...prev, { id, msg, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 3200);
-  };
+  }, []);
   return { toasts, addToast };
 }
 
 // --- Recursive Tree Component ---
-function TreeNode({ nodeKey, value, isLast = true, displayKey = null, path = "$", addToast, expandCounter, collapseCounter }) {
+const TreeNode = React.memo(function TreeNode({ nodeKey, value, isLast = true, displayKey = null, path = "$", addToast, expandCounter, collapseCounter }) {
   const [expanded, setExpanded] = useState(true);
   const [limit, setLimit] = useState(40);
   const [showActions, setShowActions] = useState(false);
@@ -348,7 +348,7 @@ function TreeNode({ nodeKey, value, isLast = true, displayKey = null, path = "$"
       )}
     </div>
   );
-}
+});
 function syntaxHighlight(json) {
   if (typeof json !== 'string') {
     json = JSON.stringify(json, undefined, 2);
@@ -372,7 +372,7 @@ function syntaxHighlight(json) {
 }
 
 // --- GridTab Subcomponent ---
-function GridTab({ data }) {
+const GridTab = React.memo(function GridTab({ data }) {
   const [detectedArrays, setDetectedArrays] = useState({});
   const [selectedPath, setSelectedPath] = useState('');
   const [pathHistory, setPathHistory] = useState([]);
@@ -1144,7 +1144,152 @@ function GridTab({ data }) {
       </div>
     </>
   );
-}
+});
+
+// --- SwaggerTab Subcomponent ---
+const SwaggerTab = React.memo(function SwaggerTab({ parsedData, customSchema, setCustomSchema }) {
+  return (
+    <div className="tab-panel active">
+      <div className="swagger-layout">
+        <div className="endpoint-block endpoint-post collapsed">
+          <div className="endpoint-summary" onClick={(e) => e.currentTarget.parentElement.classList.toggle('collapsed')}>
+            <span className="method-badge">POST</span>
+            <span className="endpoint-path">/v1/mock/resource</span>
+            <span className="endpoint-description">Verify, mock validate, and process inbound payloads</span>
+            <span className="chevron">▼</span>
+          </div>
+          <div className="endpoint-details">
+            <h3>Request Parameters Schema</h3>
+            <table className="schema-properties-table">
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                  <th>Validation Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parsedData ? (
+                  customSchema.map((prop, i) => (
+                    <tr key={i}>
+                      <td><strong><code>{prop.name}</code></strong></td>
+                      <td><span className="badge" style={{ color: 'var(--accent-cyan)' }}>{prop.type}</span></td>
+                      <td>
+                        <input 
+                          type="checkbox" 
+                          checked={prop.required !== false} 
+                          onChange={(e) => {
+                            const newSchema = [...customSchema];
+                            newSchema[i].required = e.target.checked;
+                            setCustomSchema(newSchema);
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          value={prop.validation || ''} 
+                          onChange={(e) => {
+                            const newSchema = [...customSchema];
+                            newSchema[i].validation = e.target.value;
+                            setCustomSchema(newSchema);
+                          }}
+                          placeholder="None"
+                          style={{ width: '100%', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '4px 8px', borderRadius: '4px' }}
+                        />
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="text-muted text-center">Paste valid JSON in the editor to view schema specs</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="swagger-model card">
+          <div className="model-header" onClick={() => {
+            const details = document.getElementById('model-detail-pre');
+            if (details) details.style.display = details.style.display === 'none' ? 'block' : 'none';
+          }}>
+            <span>Model Schema: <code>AeroSchemaModel</code></span>
+            <span className="chevron">▼</span>
+          </div>
+          <pre id="model-detail-pre" className="code-block font-mono" style={{ padding: '16px', margin: 0 }}>
+            {parsedData ? (
+              <code dangerouslySetInnerHTML={{
+                __html: '{\n' + customSchema.map((prop, i, arr) => (
+                  `  "${prop.name}": <span class="type-${prop.type}">${prop.type}</span>${i === arr.length - 1 ? '' : ','}${prop.validation ? ` // ${prop.validation}` : ''}${prop.required === false ? ' /* optional */' : ''}`
+                )).join('\n') + '\n}'
+              }} />
+            ) : (
+              <code className="text-muted">// Ready to infer model specifications</code>
+            )}
+          </pre>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// --- TreeTab Subcomponent ---
+const TreeTab = React.memo(function TreeTab({ parsedData, treeExpandCounter, setTreeExpandCounter, treeCollapseCounter, setTreeCollapseCounter, addToast }) {
+  return (
+    <div className="tab-panel active">
+      <div className="tree-controls card">
+        <div className="search-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input 
+            type="text" 
+            id="tree-search" 
+            placeholder="Search property keys or values..."
+            onChange={(e) => {
+              const val = e.target.value.toLowerCase();
+              document.querySelectorAll('.tree-node-row').forEach(el => {
+                if (val && el.innerText.toLowerCase().includes(val)) {
+                  el.classList.add('search-match');
+                } else {
+                  el.classList.remove('search-match');
+                }
+              });
+            }}
+          />
+        </div>
+        <div className="tree-actions">
+          <button className="btn btn-sm btn-secondary" onClick={() => setTreeExpandCounter(prev => prev + 1)}>Expand All</button>
+          <button className="btn btn-sm btn-secondary" onClick={() => setTreeCollapseCounter(prev => prev + 1)}>Collapse All</button>
+        </div>
+      </div>
+
+      <div className="tree-viewport card">
+        <div id="tree-root">
+          {parsedData ? (
+            <div className="tree-node-list">
+              <TreeNode 
+                nodeKey="" 
+                value={parsedData} 
+                isLast={true} 
+                displayKey="Root" 
+                path="$" 
+                addToast={addToast} 
+                expandCounter={treeExpandCounter}
+                collapseCounter={treeCollapseCounter}
+              />
+            </div>
+          ) : (
+            <span className="text-muted">Enter valid JSON in the editor to visualize as an interactive tree.</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
 
 // --- App Entry Point ---
 export default function App() {
@@ -1712,143 +1857,19 @@ export default function App() {
           <div className="tabs-content">
             {/* Tab: Swagger Spec */}
             {activeTab === 'swagger' && (
-              <div className="tab-panel active">
-                <div className="swagger-layout">
-                  <div className="endpoint-block endpoint-post collapsed">
-                    <div className="endpoint-summary" onClick={(e) => e.currentTarget.parentElement.classList.toggle('collapsed')}>
-                      <span className="method-badge">POST</span>
-                      <span className="endpoint-path">/v1/mock/resource</span>
-                      <span className="endpoint-description">Verify, mock validate, and process inbound payloads</span>
-                      <span className="chevron">▼</span>
-                    </div>
-                    <div className="endpoint-details">
-                      <h3>Request Parameters Schema</h3>
-                      <table className="schema-properties-table">
-                        <thead>
-                          <tr>
-                            <th>Parameter</th>
-                            <th>Type</th>
-                            <th>Required</th>
-                            <th>Validation Rule</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {parsedData ? (
-                            customSchema.map((prop, i) => (
-                              <tr key={i}>
-                                <td><strong><code>{prop.name}</code></strong></td>
-                                <td><span className="badge" style={{ color: 'var(--accent-cyan)' }}>{prop.type}</span></td>
-                                <td>
-                                  <input 
-                                    type="checkbox" 
-                                    checked={prop.required !== false} 
-                                    onChange={(e) => {
-                                      const newSchema = [...customSchema];
-                                      newSchema[i].required = e.target.checked;
-                                      setCustomSchema(newSchema);
-                                    }}
-                                    style={{ cursor: 'pointer' }}
-                                  />
-                                </td>
-                                <td>
-                                  <input 
-                                    type="text" 
-                                    className="form-control" 
-                                    value={prop.validation || ''} 
-                                    onChange={(e) => {
-                                      const newSchema = [...customSchema];
-                                      newSchema[i].validation = e.target.value;
-                                      setCustomSchema(newSchema);
-                                    }}
-                                    placeholder="None"
-                                    style={{ width: '100%', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '4px 8px', borderRadius: '4px' }}
-                                  />
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan="4" className="text-muted text-center">Paste valid JSON in the editor to view schema specs</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div className="swagger-model card">
-                    <div className="model-header" onClick={() => {
-                      const details = document.getElementById('model-detail-pre');
-                      if (details) details.style.display = details.style.display === 'none' ? 'block' : 'none';
-                    }}>
-                      <span>Model Schema: <code>AeroSchemaModel</code></span>
-                      <span className="chevron">▼</span>
-                    </div>
-                    <pre id="model-detail-pre" className="code-block font-mono" style={{ padding: '16px', margin: 0 }}>
-                      {parsedData ? (
-                        <code dangerouslySetInnerHTML={{
-                          __html: '{\n' + customSchema.map((prop, i, arr) => (
-                            `  "${prop.name}": <span class="type-${prop.type}">${prop.type}</span>${i === arr.length - 1 ? '' : ','}${prop.validation ? ` // ${prop.validation}` : ''}${prop.required === false ? ' /* optional */' : ''}`
-                          )).join('\n') + '\n}'
-                        }} />
-                      ) : (
-                        <code className="text-muted">// Ready to infer model specifications</code>
-                      )}
-                    </pre>
-                  </div>
-                </div>
-              </div>
+              <SwaggerTab parsedData={parsedData} customSchema={customSchema} setCustomSchema={setCustomSchema} />
             )}
 
             {/* Tab: Interactive Tree */}
             {activeTab === 'tree' && (
-              <div className="tab-panel active">
-                <div className="tree-controls card">
-                  <div className="search-box">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    <input 
-                      type="text" 
-                      id="tree-search" 
-                      placeholder="Search property keys or values..."
-                      onChange={(e) => {
-                        const val = e.target.value.toLowerCase();
-                        document.querySelectorAll('.tree-node-row').forEach(el => {
-                          if (val && el.innerText.toLowerCase().includes(val)) {
-                            el.classList.add('search-match');
-                          } else {
-                            el.classList.remove('search-match');
-                          }
-                        });
-                      }}
-                    />
-                  </div>
-                  <div className="tree-actions">
-                    <button className="btn btn-sm btn-secondary" onClick={() => setTreeExpandCounter(prev => prev + 1)}>Expand All</button>
-                    <button className="btn btn-sm btn-secondary" onClick={() => setTreeCollapseCounter(prev => prev + 1)}>Collapse All</button>
-                  </div>
-                </div>
-
-                <div className="tree-viewport card">
-                  <div id="tree-root">
-                    {parsedData ? (
-                      <div className="tree-node-list">
-                        <TreeNode 
-                          nodeKey="" 
-                          value={parsedData} 
-                          isLast={true} 
-                          displayKey="Root" 
-                          path="$" 
-                          addToast={addToast} 
-                          expandCounter={treeExpandCounter}
-                          collapseCounter={treeCollapseCounter}
-                        />
-                      </div>
-                    ) : (
-                      <span className="text-muted">Enter valid JSON in the editor to visualize as an interactive tree.</span>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <TreeTab 
+                parsedData={parsedData} 
+                treeExpandCounter={treeExpandCounter} 
+                setTreeExpandCounter={setTreeExpandCounter} 
+                treeCollapseCounter={treeCollapseCounter} 
+                setTreeCollapseCounter={setTreeCollapseCounter} 
+                addToast={addToast} 
+              />
             )}
             {activeTab === 'grid' && (
               <div className="tab-panel active">
@@ -1879,7 +1900,7 @@ export default function App() {
 }
 
 // --- ToolsTab Subcomponent ---
-function ToolsTab({ data, addToast }) {
+const ToolsTab = React.memo(function ToolsTab({ data, addToast }) {
   const [activeTool, setActiveTool] = useState('query');
   const [queryStr, setQueryStr] = useState('');
   const [convertFormat, setConvertFormat] = useState('yaml');
@@ -2196,10 +2217,10 @@ function ToolsTab({ data, addToast }) {
       </div>
     </div>
   );
-}
+});
 
 // --- SandboxTab Subcomponent ---
-function SandboxTab({ data, addToast }) {
+const SandboxTab = React.memo(function SandboxTab({ data, addToast }) {
   const [method, setMethod] = useState('POST');
   const [status, setStatus] = useState(200);
   const [latency, setLatency] = useState(100);
@@ -2359,10 +2380,10 @@ function SandboxTab({ data, addToast }) {
       </div>
     </div>
   );
-}
+});
 
 // --- CodeSnippetsTab Subcomponent ---
-function CodeSnippetsTab({ data, addToast }) {
+const CodeSnippetsTab = React.memo(function CodeSnippetsTab({ data, addToast }) {
   const [lang, setLang] = useState('curl');
 
   const jsonString = JSON.stringify(data || {});
@@ -2489,4 +2510,4 @@ else:
       </div>
     </div>
   );
-}
+});
