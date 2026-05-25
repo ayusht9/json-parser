@@ -377,7 +377,8 @@ function GridTab({ data }) {
   const [pathHistory, setPathHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [currentPage, setCurrentPage] = useState(1);
-  const [gridSearch, setGridSearch] = useState('');
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [tableFilter, setTableFilter] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [isTransposed, setIsTransposed] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -536,10 +537,60 @@ function GridTab({ data }) {
 
   const paths = Object.keys(detectedArrays);
 
-  const filteredPaths = React.useMemo(() => {
-    if (!gridSearch || !gridSearch.trim().startsWith('$')) return paths;
-    return paths.filter(p => p.toLowerCase().includes(gridSearch.toLowerCase()));
-  }, [gridSearch, paths]);
+  const searchResults = React.useMemo(() => {
+    if (!globalSearch || globalSearch.trim().length < 2) return [];
+    
+    const results = [];
+    const lowerQuery = globalSearch.toLowerCase();
+    let objectsChecked = 0;
+
+    const dfs = (obj, path, depth) => {
+      if (depth > 100 || results.length >= 100 || objectsChecked > 10000) return;
+      
+      if (obj === null) {
+        if ("null".includes(lowerQuery)) {
+           results.push({ path, value: "null", type: "null" });
+        }
+        return;
+      }
+      
+      const type = typeof obj;
+      if (type !== 'object') {
+        if (String(obj).toLowerCase().includes(lowerQuery)) {
+          results.push({ path, value: String(obj), type });
+        }
+        return;
+      }
+
+      objectsChecked++;
+      
+      if (Array.isArray(obj)) {
+        for (let i = 0; i < obj.length; i++) {
+          dfs(obj[i], `${path}[${i}]`, depth + 1);
+          if (results.length >= 100) return;
+        }
+      } else {
+        let keysChecked = 0;
+        for (const key in obj) {
+          if (keysChecked++ > 500) break;
+          
+          const isSimple = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key);
+          const nextPath = path === '$' ? 
+            (isSimple ? `$.${key}` : `$["${key.replace(/"/g, '\\"')}"]`) : 
+            (isSimple ? `${path}.${key}` : `${path}["${key.replace(/"/g, '\\"')}"]`);
+
+          if (key.toLowerCase().includes(lowerQuery)) {
+             results.push({ path: nextPath, value: `<Key Match>`, type: 'key' });
+          }
+          dfs(obj[key], nextPath, depth + 1);
+          if (results.length >= 100) return;
+        }
+      }
+    };
+
+    dfs(data, '$', 0);
+    return results;
+  }, [data, globalSearch]);
 
   const resolvePath = (obj, path) => {
     if (!path || path === '$') return obj;
@@ -599,22 +650,8 @@ function GridTab({ data }) {
   }, [activeArray]);
 
   const headers = React.useMemo(() => {
-    if (isPrimitiveArray) return originalHeaders;
-    if (gridSearch && gridSearch.trim().startsWith('$')) {
-      const trimmedPath = gridSearch.trim();
-      if (trimmedPath.startsWith(selectedPath)) {
-        const remainder = trimmedPath.slice(selectedPath.length);
-        const match = remainder.match(/^(?:\[(\d+)\])?(?:(?:\.)([a-zA-Z_$][a-zA-Z0-9_$]*)|\["([^"]+)"\]|\['([^']+)'\])?$/);
-        if (match) {
-          const targetCol = match[2] || match[3] || match[4];
-          if (targetCol) {
-            return ['Index', targetCol];
-          }
-        }
-      }
-    }
     return originalHeaders;
-  }, [originalHeaders, isPrimitiveArray, gridSearch, selectedPath]);
+  }, [originalHeaders]);
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -624,36 +661,15 @@ function GridTab({ data }) {
   };
 
   const processedArray = React.useMemo(() => {
-    if (!gridSearch && !sortConfig.key) return null; // Lazy mode for default view
+    if (!tableFilter && !sortConfig.key) return null; // Lazy mode for default view
 
     let result = [];
     for (let i = 0; i < activeArray.length; i++) {
       result.push({ _originalIndex: i, data: activeArray[i] });
     }
 
-    if (gridSearch) {
-      const lowerSearch = gridSearch.toLowerCase();
-      const isPathSearch = gridSearch.trim().startsWith('$');
-      
-      if (isPathSearch) {
-        const trimmedPath = gridSearch.trim();
-        if (trimmedPath === selectedPath) {
-          return result; // Exact array match, show all items
-        }
-        if (trimmedPath.startsWith(selectedPath)) {
-          const remainder = trimmedPath.slice(selectedPath.length);
-          const match = remainder.match(/^(?:\[(\d+)\])?(?:(?:\.)([a-zA-Z_$][a-zA-Z0-9_$]*)|\["([^"]+)"\]|\['([^']+)'\])?$/);
-          if (match) {
-            if (match[1]) {
-              const targetIndex = parseInt(match[1], 10);
-              return result.filter(item => item._originalIndex === targetIndex);
-            } else {
-              return result; // Filtered by column only, so return all rows
-            }
-          }
-        }
-      }
-
+    if (tableFilter) {
+      const lowerSearch = tableFilter.toLowerCase();
       result = result.filter(item => {
         try {
           return JSON.stringify(item.data).toLowerCase().includes(lowerSearch);
@@ -680,7 +696,7 @@ function GridTab({ data }) {
       });
     }
     return result;
-  }, [activeArray, gridSearch, sortConfig, isPrimitiveArray, selectedPath]);
+  }, [activeArray, tableFilter, sortConfig, isPrimitiveArray, selectedPath]);
 
   const totalRecords = processedArray ? processedArray.length : activeArray.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
@@ -913,74 +929,66 @@ function GridTab({ data }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input 
               type="text" 
-              placeholder="Search data or enter path..." 
-              value={gridSearch}
+              placeholder="Global JSON search (minimum 2 chars)..." 
+              value={globalSearch}
               onFocus={() => setShowDropdown(true)}
               onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
                   e.preventDefault();
-                  setFocusedSuggestionIndex(prev => Math.min(prev + 1, filteredPaths.length - 1));
+                  setFocusedSuggestionIndex(prev => Math.min(prev + 1, searchResults.length - 1));
                   setShowDropdown(true);
                 } else if (e.key === 'ArrowUp') {
                   e.preventDefault();
                   setFocusedSuggestionIndex(prev => Math.max(prev - 1, -1));
                 } else if ((e.key === 'Enter' || e.key === 'Tab') && showDropdown && focusedSuggestionIndex >= 0) {
                   e.preventDefault();
-                  const selected = filteredPaths[focusedSuggestionIndex];
-                  handleSelectPath(selected);
-                  setGridSearch(selected);
+                  const selected = searchResults[focusedSuggestionIndex];
+                  if (selected) {
+                    handleSelectPath(selected.path);
+                  }
                   setShowDropdown(false);
                 } else if (e.key === 'Escape') {
                   setShowDropdown(false);
                 }
               }}
               onChange={(e) => { 
-                const val = e.target.value;
-                setGridSearch(val);
+                setGlobalSearch(e.target.value);
                 setShowDropdown(true);
                 setFocusedSuggestionIndex(-1);
-                setCurrentPage(1);
-
-                if (val.trim().startsWith('$')) {
-                  const trimmedPath = val.trim();
-                  const sortedPaths = Object.keys(detectedArrays).sort((a, b) => b.length - a.length);
-                  const matchedPath = sortedPaths.find(p => trimmedPath === p || trimmedPath.startsWith(p + '[') || trimmedPath.startsWith(p + '.'));
-                  
-                  if (matchedPath) {
-                    handleSelectPath(matchedPath);
-                  }
-                }
               }}
               style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', color: 'var(--text-primary)', padding: '6px 8px', fontSize: '13px' }}
             />
-            {showDropdown && filteredPaths.length > 0 && (
+            {showDropdown && searchResults.length > 0 && (
               <ul className="custom-dropdown" style={{ 
                 position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, 
-                maxHeight: '200px', overflowY: 'auto', 
+                maxHeight: '300px', overflowY: 'auto', 
                 background: 'var(--bg-app)', border: '1px solid var(--border-color)', 
                 borderRadius: '4px', zIndex: 9999, margin: 0, padding: '4px 0', 
                 listStyle: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
               }}>
-                {filteredPaths.map((p, idx) => {
+                {searchResults.map((res, idx) => {
                   const isFocused = idx === focusedSuggestionIndex;
                   return (
                     <li 
-                      key={p} 
+                      key={`${res.path}-${idx}`} 
                       onMouseDown={(e) => {
-                        e.preventDefault(); // Prevent input onBlur from firing first
-                        handleSelectPath(p);
-                        setGridSearch(p);
+                        e.preventDefault(); 
+                        handleSelectPath(res.path);
                         setShowDropdown(false);
                       }}
                       onMouseEnter={() => setFocusedSuggestionIndex(idx)}
                       style={{ 
-                        padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontFamily: 'var(--font-mono)',
+                        padding: '8px 12px', cursor: 'pointer', fontSize: '12px', fontFamily: 'var(--font-mono)',
                         background: isFocused ? 'var(--bg-hover, rgba(255,255,255,0.1))' : 'transparent',
-                        color: isFocused ? 'var(--text-primary)' : 'var(--text-muted)'
+                        color: isFocused ? 'var(--text-primary)' : 'var(--text-muted)',
+                        display: 'flex', flexDirection: 'column', gap: '4px', borderBottom: '1px solid var(--border-color)'
                       }}
                     >
-                      {p}
+                      <div style={{ color: 'var(--accent-cyan)', fontWeight: 'bold', wordBreak: 'break-all' }}>{res.path}</div>
+                      <div style={{ color: res.type === 'key' ? 'var(--json-key)' : 'var(--text-primary)', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {res.value.length > 100 ? res.value.substring(0, 100) + '...' : res.value}
+                      </div>
                     </li>
                   );
                 })}
@@ -988,8 +996,18 @@ function GridTab({ data }) {
             )}
           </div>
         </div>
-        <div className="grid-actions" style={{ display: 'flex', alignItems: 'flex-end' }}>
-          <button onClick={() => setIsTransposed(!isTransposed)} className={`btn btn-xs ${isTransposed ? 'btn-primary' : 'btn-secondary'}`} style={{ height: '32px', marginRight: '8px' }}>
+        <div className="grid-actions" style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+          <div className="search-box" style={{ width: '180px', background: 'var(--bg-input)', padding: '0 8px', display: 'flex', alignItems: 'center', height: '32px' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input 
+              type="text" 
+              placeholder="Filter table rows..." 
+              value={tableFilter}
+              onChange={(e) => { setTableFilter(e.target.value); setCurrentPage(1); }}
+              style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', color: 'var(--text-primary)', padding: '4px 8px', fontSize: '12px' }}
+            />
+          </div>
+          <button onClick={() => setIsTransposed(!isTransposed)} className={`btn btn-xs ${isTransposed ? 'btn-primary' : 'btn-secondary'}`} style={{ height: '32px' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}>
               <polyline points="21 8 21 21 3 21 3 8"></polyline>
               <rect x="1" y="3" width="22" height="5"></rect>
