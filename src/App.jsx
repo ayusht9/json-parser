@@ -417,20 +417,20 @@ function GridTab({ data }) {
   useEffect(() => {
     const list = {};
     const collectArrays = (obj, path, depth = 0) => {
-      if (depth > 20) return; // Prevent stack overflow on deeply nested JSON
-      if (Object.keys(list).length >= 2000) return;
+      if (depth > 200) return; // Prevent stack overflow on deeply nested JSON
+      if (Object.keys(list).length >= 20000) return;
       if (obj === null || typeof obj !== 'object') return;
       
       if (Array.isArray(obj)) {
         list[path] = obj;
         obj.forEach((item, index) => {
-          if (index < 20) collectArrays(item, `${path}[${index}]`, depth + 1);
+          if (index < 100) collectArrays(item, `${path}[${index}]`, depth + 1);
         });
       } else {
         list[path] = [obj];
         let keysChecked = 0;
         for (const key in obj) {
-          if (keysChecked++ > 50) break; // Limit scanning to 50 keys per object to prevent crashing
+          if (keysChecked++ > 500) break; // Limit scanning to 500 keys per object to prevent crashing
           const val = obj[key];
           const isSimple = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key);
           let nextPath;
@@ -444,7 +444,7 @@ function GridTab({ data }) {
             if (Array.isArray(val)) {
               list[nextPath] = val;
               val.forEach((item, index) => {
-                if (index < 20) collectArrays(item, `${nextPath}[${index}]`, depth + 1);
+                if (index < 100) collectArrays(item, `${nextPath}[${index}]`, depth + 1);
               });
             } else {
               collectArrays(val, nextPath, depth + 1);
@@ -526,8 +526,8 @@ function GridTab({ data }) {
       } else {
         hdrs = ['Index'];
         const keySet = new Set();
-        // Sample up to 50 items to avoid freezing on massive arrays
-        activeArray.slice(0, 50).forEach(item => {
+        // Sample up to 500 items to avoid freezing on massive arrays
+        activeArray.slice(0, 500).forEach(item => {
           if (item && typeof item === 'object') {
             Object.keys(item).forEach(k => keySet.add(k));
           }
@@ -720,7 +720,7 @@ function GridTab({ data }) {
         val.forEach(subObj => {
           if (subObj) Object.keys(subObj).forEach(k => subKeys.add(k));
         });
-        const subHeaders = Array.from(subKeys).slice(0, 4);
+        const subHeaders = Array.from(subKeys).slice(0, 8);
 
         return (
           <table className="cell-nested-table">
@@ -730,7 +730,7 @@ function GridTab({ data }) {
               </tr>
             </thead>
             <tbody>
-              {val.slice(0, 3).map((subRow, r) => (
+              {val.slice(0, 10).map((subRow, r) => (
                 <tr key={r}>
                   {subHeaders.map(sh => {
                     const innerVal = subRow ? subRow[sh] : undefined;
@@ -748,10 +748,10 @@ function GridTab({ data }) {
                   })}
                 </tr>
               ))}
-              {val.length > 3 && (
+              {val.length > 10 && (
                 <tr>
-                  <td colSpan={subHeaders.length} className="text-muted text-center" style={{ fontSize: '9.5px', padding: '2px' }}>
-                    + {val.length - 3} more items
+                  <td colSpan={subHeaders.length} className="text-muted text-center" style={{ fontSize: '11px', padding: '4px' }}>
+                    + {val.length - 10} more items
                   </td>
                 </tr>
               )}
