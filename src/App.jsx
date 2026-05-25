@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import CodeEditor from '@uiw/react-textarea-code-editor';
 
 // --- Sample Data Profiles ---
 const SAMPLES = {
@@ -1228,9 +1229,9 @@ export default function App() {
   const lineNumbersRef = useRef(null);
 
   // Sync scroll
-  const handleEditorScroll = () => {
-    if (editorRef.current && lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = editorRef.current.scrollTop;
+  const handleEditorScroll = (e) => {
+    if (lineNumbersRef.current && e.target) {
+      lineNumbersRef.current.scrollTop = e.target.scrollTop;
     }
   };
 
@@ -1605,15 +1606,23 @@ export default function App() {
               <div className="line-numbers" ref={lineNumbersRef}>
                 {lines.map((_, i) => <span key={i}>{i + 1}</span>)}
               </div>
-              <textarea
+              <CodeEditor
                 id="json-input"
                 ref={editorRef}
+                language="json"
                 value={inputText}
                 onChange={handleInputChange}
                 onScroll={handleEditorScroll}
                 placeholder='Paste or write your JSON here...'
-                spellCheck="false"
-                style={{ whiteSpace: isWrapEnabled ? 'pre-wrap' : 'pre', overflowX: isWrapEnabled ? 'hidden' : 'auto' }}
+                style={{ 
+                  flex: 1, 
+                  height: '100%', 
+                  overflowY: 'auto', 
+                  whiteSpace: isWrapEnabled ? 'pre-wrap' : 'pre', 
+                  overflowX: isWrapEnabled ? 'hidden' : 'auto', 
+                  fontFamily: 'var(--font-mono)', 
+                  backgroundColor: 'transparent' 
+                }}
               />
             </div>
 
