@@ -296,6 +296,13 @@ body {
   position: relative;
 }
 
+/* Fix CodeEditor wrapping */
+.editor-wrapper[data-wrap="true"] .w-tc-editor-text {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+}
+
+
 .line-numbers {
   width: 45px;
   padding: 16px 0;

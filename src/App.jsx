@@ -371,6 +371,99 @@ function syntaxHighlight(json) {
   });
 }
 
+const LiteCodeEditor = React.forwardRef(({ value, onChange, onScroll, style, placeholder, wrap }, ref) => {
+  const preRef = useRef(null);
+
+  const handleScroll = (e) => {
+    if (preRef.current) {
+      preRef.current.scrollTop = e.target.scrollTop;
+      preRef.current.scrollLeft = e.target.scrollLeft;
+    }
+    if (onScroll) onScroll(e);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = e.target.selectionStart;
+      const end = e.target.selectionEnd;
+      const target = e.target;
+      const val = target.value;
+      target.value = val.substring(0, start) + '  ' + val.substring(end);
+      target.selectionStart = target.selectionEnd = start + 2;
+      if (onChange) {
+        // Trigger React synthetic event manually if possible, or just call onChange
+        onChange({ target: target, preventDefault: e.preventDefault, stopPropagation: e.stopPropagation });
+      }
+    }
+  };
+
+  return (
+    <div className="lite-editor-container" style={{ position: 'relative', display: 'flex', flex: 1, overflow: 'hidden', ...style }}>
+      <pre
+        ref={preRef}
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          margin: 0,
+          padding: '16px',
+          border: 'none',
+          background: 'transparent',
+          color: 'var(--text-primary)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '15px',
+          lineHeight: '1.5',
+          overflow: 'hidden',
+          whiteSpace: wrap === 'pre-wrap' ? 'pre-wrap' : 'pre',
+          wordWrap: wrap === 'pre-wrap' ? 'break-word' : 'normal',
+          boxSizing: 'border-box',
+          zIndex: 1,
+          pointerEvents: 'none',
+        }}
+        dangerouslySetInnerHTML={{ __html: syntaxHighlight(value) + '<br/>' }}
+      />
+      <textarea
+        id="json-input"
+        ref={ref}
+        value={value}
+        onChange={onChange}
+        onScroll={handleScroll}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        wrap={wrap === 'pre-wrap' ? 'soft' : 'off'}
+        spellCheck="false"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          margin: 0,
+          padding: '16px',
+          border: 'none',
+          background: 'transparent',
+          color: 'transparent',
+          caretColor: 'var(--text-primary)',
+          resize: 'none',
+          outline: 'none',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '15px',
+          lineHeight: '1.5',
+          overflow: 'auto',
+          whiteSpace: wrap === 'pre-wrap' ? 'pre-wrap' : 'pre',
+          wordWrap: wrap === 'pre-wrap' ? 'break-word' : 'normal',
+          boxSizing: 'border-box',
+          zIndex: 2,
+        }}
+      />
+    </div>
+  );
+});
+
 // --- GridTab Subcomponent ---
 const GridTab = React.memo(function GridTab({ data }) {
   const [detectedArrays, setDetectedArrays] = useState({});
@@ -1299,6 +1392,7 @@ export default function App() {
   const [syntaxError, setSyntaxError] = useState(null);
   const [activeTab, setActiveTab] = useState('swagger');
   const [isWrapEnabled, setIsWrapEnabled] = useState(true);
+  const [isColorEnabled, setIsColorEnabled] = useState(true);
   const [customSchema, setCustomSchema] = useState([]);
 
   useEffect(() => {
@@ -1729,6 +1823,7 @@ export default function App() {
               <h2>JSON INPUT EDITOR</h2>
               <div className="editor-actions">
                 <button className={`btn btn-sm ${isWrapEnabled ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setIsWrapEnabled(!isWrapEnabled)}>Wrap</button>
+                <button className={`btn btn-sm ${isColorEnabled ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setIsColorEnabled(!isColorEnabled)}>Color</button>
                 <button className="btn btn-sm btn-primary" onClick={formatJSON}>Format</button>
                 <button className="btn btn-sm btn-secondary" onClick={minifyJSON}>Minify</button>
                 <button className="btn btn-sm btn-secondary" onClick={saveJSON}>Save</button>
@@ -1747,28 +1842,46 @@ export default function App() {
               </div>
             </div>
 
-            <div className="editor-wrapper card">
+            <div className="editor-wrapper card" data-wrap={isWrapEnabled}>
               <div className="line-numbers" ref={lineNumbersRef}>
                 {lines.map((_, i) => <span key={i}>{i + 1}</span>)}
               </div>
-              <CodeEditor
-                id="json-input"
-                ref={editorRef}
-                language="json"
-                value={inputText}
-                onChange={handleInputChange}
-                onScroll={handleEditorScroll}
-                placeholder='Paste or write your JSON here...'
-                style={{ 
-                  flex: 1, 
-                  height: '100%', 
-                  overflowY: 'auto', 
-                  whiteSpace: isWrapEnabled ? 'pre-wrap' : 'pre', 
-                  overflowX: isWrapEnabled ? 'hidden' : 'auto', 
-                  fontFamily: 'var(--font-mono)', 
-                  backgroundColor: 'transparent' 
-                }}
-              />
+              {isColorEnabled ? (
+                <LiteCodeEditor
+                  ref={editorRef}
+                  value={inputText}
+                  onChange={handleInputChange}
+                  onScroll={handleEditorScroll}
+                  placeholder='Paste or write your JSON here...'
+                  wrap={isWrapEnabled ? 'pre-wrap' : 'pre'}
+                />
+              ) : (
+                <textarea 
+                  id="json-input"
+                  ref={editorRef}
+                  value={inputText}
+                  onChange={handleInputChange}
+                  onScroll={handleEditorScroll}
+                  placeholder='Paste or write your JSON here...'
+                  wrap={isWrapEnabled ? "soft" : "off"}
+                  style={{ 
+                    flex: 1, 
+                    width: '100%', 
+                    border: 'none', 
+                    background: 'transparent', 
+                    resize: 'none', 
+                    outline: 'none', 
+                    color: 'var(--text-primary)', 
+                    fontFamily: 'var(--font-mono)', 
+                    fontSize: '15px', 
+                    lineHeight: '1.5', 
+                    padding: '16px', 
+                    overflowY: 'auto', 
+                    whiteSpace: isWrapEnabled ? 'pre-wrap' : 'pre',
+                    overflowX: isWrapEnabled ? 'hidden' : 'auto'
+                  }}
+                />
+              )}
             </div>
 
             <div className="console-panel card">
